@@ -1,10 +1,225 @@
-// This file contains the main logic for analyzing GitHub repositories.
-// It exports the function `analyzeGitHubRepository(repoUrl)` which takes a repository URL as input and returns an analysis summary, risk score, and risk rating.
+import semver from 'semver';
 
-const fetch = require('node-fetch');
-const semver = require('semver'); // Add this dependency to package.json
+// Response types for GitHub API
+interface RepoInfo {
+  created_at: string;
+  updated_at: string;
+  stargazers_count: number;
+  forks_count: number;
+  subscribers_count: number;
+  open_issues_count: number;
+  license?: {
+    name: string;
+  };
+  size?: number;
+}
 
-async function analyzeGitHubRepository(repoUrl) {
+/**
+ * GitHub Contributor object
+ * @see https://docs.github.com/en/rest/reference/repos#list-repository-contributors
+ */
+interface Contributor {
+  login: string;
+  url: string;
+}
+
+/**
+ * GitHub User object
+ * @see https://docs.github.com/en/rest/reference/users#get-a-user
+ */
+interface UserData {
+  created_at: string;
+}
+
+/**
+ * GitHub Release object
+ * @see https://docs.github.com/en/rest/reference/repos#list-releases
+ */
+interface GitHubRelease {
+  tag_name: string;
+  published_at: string;
+}
+
+/**
+ * GitHub Commit object
+ * @see https://docs.github.com/en/rest/reference/repos#list-commits
+ */
+interface GitHubCommit {
+  commit: {
+    author: {
+      date: string;
+    };
+  };
+}
+
+/**
+ * GitHub Issue object
+ * @see https://docs.github.com/en/rest/reference/issues#list-issues-assigned-to-the-authenticated-user
+ */
+interface GitHubIssue {
+  number: number;
+  created_at: string;
+  updated_at: string;
+  comments_url: string;
+  pull_request?: {
+    url: string;
+    html_url: string;
+    diff_url: string;
+  };
+}
+
+/**
+ * GitHub PR Comment object
+ * @see https://docs.github.com/en/rest/reference/pulls#list-review-comments-for-a-pull-request
+ */
+interface GitHubComment {
+  created_at: string;
+}
+
+/**
+ * Dependency item interface
+ */
+interface DependencyItem {
+  name: string;
+  version: string;
+}
+
+/**
+ * Outdated dependency interface
+ */
+interface OutdatedDependency extends DependencyItem {
+  currentVersion: string;
+  latestVersion: string;
+  isMajorBehind: boolean;
+  isMinorBehind: boolean;
+  isPatchBehind: boolean;
+  versionsBehind: {
+    major: number;
+    minor: number;
+    patch: number;
+  };
+  updateUrgency: 'high' | 'medium' | 'low';
+}
+
+/**
+ * Vulnerable package interface
+ */
+interface VulnerablePackage {
+  name: string;
+  severity: string;
+  fixedIn: string;
+  id?: string;
+  details?: string;
+  package?: string;
+  version?: string;
+}
+
+/**
+ * Response time metrics interface
+ */
+interface ResponseTimeMetrics {
+  averageResponseHours: number;
+  sampleSize: number;
+}
+
+/**
+ * Release information interface
+ */
+interface ReleaseInfo {
+  hasReleases: boolean;
+  releaseCount: number;
+  latestReleaseDate: Date | null;
+  daysSinceLastRelease: number | null;
+  usesSemanticVersioning: boolean;
+}
+
+/**
+ * Dependency analysis interface
+ */
+interface DependencyAnalysis {
+  hasDependencies: boolean;
+  dependenciesCount: number;
+  parsedDependencies: DependencyItem[];
+  outdatedDependencies: OutdatedDependency[];
+  majorOutdatedCount: number;
+  minorOutdatedCount: number;
+  vulnerablePackages: VulnerablePackage[];
+  alertsEnabled: boolean;
+  highSeverityCount: number | null;
+  mediumSeverityCount: number | null;
+  lowSeverityCount: number | null;
+  vulnerabilitySource: string | null;
+}
+
+/**
+ * Risk rating interface
+ */
+interface AnalysisResult {
+  markdownSummary: string;
+  riskScore: number | string;
+  riskRating?: 'N/A' | 'Low' | 'Medium' | 'High';
+}
+
+/**
+ * Open source vulnerability database interface
+ */
+interface OsvVulnerability {
+  id: string;
+  summary?: string;
+  severity?: Array<{ type: string }>;
+  database_specific?: {
+    cvss?: {
+      score: number;
+    };
+    severity?: string;
+  };
+  affected?: Array<{
+    ranges?: Array<{
+      type: string;
+      events?: Array<{
+        fixed?: string;
+      }>;
+    }>;
+  }>;
+}
+
+/**
+ * Content response interface for GitHub API
+ */
+interface ContentResponse {
+  content: string;
+  encoding: string;
+  size: number;
+  html_url: string;
+}
+
+// Add at the top with other interfaces
+interface PackageJson {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+}
+
+interface NpmResponse {
+  version: string;
+}
+
+interface PyPiResponse {
+  info: {
+    version: string;
+  };
+}
+
+interface ApiQueryResponse<T> {
+  vulns?: T[];
+}
+
+/**
+ * Function to Analyze a GitHub Repository
+ *
+ * @param {string} repoUrl - The URL of the GitHub repository to analyze.
+ * @returns {Promise<AnalysisResult>} - A promise that resolves to an object containing the analysis results.
+ */
+export async function analyzeGitHubRepository(repoUrl: string): Promise<AnalysisResult> {
   try {
     const parts = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
     if (!parts || parts.length !== 3) {
@@ -18,7 +233,7 @@ async function analyzeGitHubRepository(repoUrl) {
     const apiUrl = `https://api.github.com/repos/${owner}/${repo}`;
 
     // --- Configure Authentication Headers ---
-    const headers = {
+    const headers: Record<string, string> = {
       Accept: 'application/vnd.github.v3+json'
     };
 
@@ -32,7 +247,7 @@ async function analyzeGitHubRepository(repoUrl) {
     }
 
     // --- Helper Function for Authenticated Requests ---
-    const fetchWithAuth = url => fetch(url, { headers });
+    const fetchWithAuth = (url: string) => fetch(url, { headers });
 
     // --- Fetch Basic Repository Information ---
     const repoInfoResponse = await fetchWithAuth(apiUrl);
@@ -42,11 +257,11 @@ async function analyzeGitHubRepository(repoUrl) {
         riskScore: 'N/A'
       };
     }
-    const repoInfo = await repoInfoResponse.json();
+    const repoInfo: RepoInfo = (await repoInfoResponse.json()) as RepoInfo;
 
     const createdAt = new Date(repoInfo.created_at);
     const updatedAt = new Date(repoInfo.updated_at);
-    const ageInDays = Math.floor((Date.now() - createdAt) / (1000 * 60 * 60 * 24));
+    const ageInDays = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
 
     // --- Get Community Metrics ---
     const starCount = repoInfo.stargazers_count;
@@ -76,7 +291,7 @@ async function analyzeGitHubRepository(repoUrl) {
 
     // --- Fetch Contributors ---
     const contributorsResponse = await fetchWithAuth(`${apiUrl}/contributors`);
-    const contributors = await contributorsResponse.json();
+    const contributors = (await contributorsResponse.json()) as Contributor[];
     const numberOfContributors = contributors.length;
 
     // --- Fetch Contributor Details ---
@@ -90,14 +305,19 @@ async function analyzeGitHubRepository(repoUrl) {
       try {
         const userResponse = await fetchWithAuth(contributor.url);
         if (userResponse.ok) {
-          const userData = await userResponse.json();
+          const userData = (await userResponse.json()) as UserData;
           const userCreatedAt = new Date(userData.created_at);
-          const userAgeInDays = Math.floor((Date.now() - userCreatedAt) / (1000 * 60 * 60 * 24));
+          const userAgeInDays = Math.floor(
+            (Date.now() - new Date(userCreatedAt).getTime()) / (1000 * 60 * 60 * 24)
+          );
           totalContributorAge += userAgeInDays;
           processedContributors++;
         }
       } catch (error) {
-        console.warn(`Could not fetch details for contributor: ${contributor.login}`);
+        console.warn(
+          `Could not fetch details for contributor: ${contributor.login}`,
+          (error as Error).message
+        );
       }
     }
 
@@ -125,7 +345,7 @@ async function analyzeGitHubRepository(repoUrl) {
     ].some(response => response.ok);
 
     // --- Analyze Dependencies for Vulnerabilities ---
-    let dependencyAnalysis = {
+    let dependencyAnalysis: DependencyAnalysis = {
       hasDependencies: hasDependencyFile,
       dependenciesCount: 0,
       parsedDependencies: [],
@@ -172,28 +392,36 @@ async function analyzeGitHubRepository(repoUrl) {
               low: 0
             };
 
-            const vulnerablePackages = [];
+            const vulnerablePackages: VulnerablePackage[] = [];
 
-            alerts.forEach(alert => {
+            (alerts as any[]).forEach(alert => {
               // Count by severity
               if (alert.security_vulnerability && alert.security_vulnerability.severity) {
                 const severity = alert.security_vulnerability.severity.toLowerCase();
                 if (severity in severityCounts) {
-                  severityCounts[severity]++;
+                  if (typeof severity === 'string' && severity in severityCounts) {
+                    severityCounts[severity as keyof typeof severityCounts]++;
+                  }
                 }
               }
 
               // Track vulnerable packages
               if (alert.security_advisory && alert.security_advisory.vulnerabilities) {
-                alert.security_advisory.vulnerabilities.forEach(vuln => {
-                  if (vuln.package && vuln.package.name) {
-                    vulnerablePackages.push({
-                      name: vuln.package.name,
-                      severity: vuln.severity || 'unknown',
-                      fixedIn: vuln.patched_versions || 'unknown'
-                    });
+                alert.security_advisory.vulnerabilities.forEach(
+                  (vuln: {
+                    package?: { name: string };
+                    severity?: string;
+                    patched_versions?: string;
+                  }) => {
+                    if (vuln.package && vuln.package.name) {
+                      vulnerablePackages.push({
+                        name: vuln.package.name,
+                        severity: vuln.severity || 'unknown',
+                        fixedIn: vuln.patched_versions || 'unknown'
+                      });
+                    }
                   }
-                });
+                );
               }
             });
 
@@ -204,18 +432,18 @@ async function analyzeGitHubRepository(repoUrl) {
           }
         }
       } catch (error) {
-        console.warn('Could not check vulnerability alerts:', error.message);
+        console.warn('Could not check vulnerability alerts:', (error as any).message);
       }
     }
 
-    // Parse dependencies from package.json if available
+    // --- Parse dependencies from package.json if available
     if (packageJsonResponse.ok) {
       try {
-        const contentResponse = await packageJsonResponse.json();
+        const contentResponse = (await packageJsonResponse.json()) as ContentResponse;
 
         if (contentResponse.content) {
           const content = Buffer.from(contentResponse.content, 'base64').toString('utf8');
-          const packageJson = JSON.parse(content);
+          const packageJson = JSON.parse(content) as PackageJson;
 
           // Combine all dependencies
           const allDeps = {
@@ -229,19 +457,19 @@ async function analyzeGitHubRepository(repoUrl) {
           dependencyAnalysis.parsedDependencies = Object.entries(allDeps)
             .map(([name, version]) => ({
               name,
-              version: version.replace(/[^0-9.]/g, '') // Clean up version string
+              version: (version as string).replace(/[^0-9.]/g, '') // Clean up version string
             }))
             .slice(0, 20); // Limit to top 20 to avoid too much data
         }
       } catch (error) {
-        console.warn('Could not parse package.json:', error.message);
+        console.warn('Could not parse package.json:', (error as Error).message);
       }
     }
 
     // Parse Python requirements if available
     if (requirementsResponse.ok && dependencyAnalysis.parsedDependencies.length === 0) {
       try {
-        const contentResponse = await requirementsResponse.json();
+        const contentResponse = (await requirementsResponse.json()) as ContentResponse;
 
         if (contentResponse.content) {
           const content = Buffer.from(contentResponse.content, 'base64').toString('utf8');
@@ -253,13 +481,13 @@ async function analyzeGitHubRepository(repoUrl) {
               const match = line.match(/^([a-zA-Z0-9_.-]+)[=~!<>]{1,2}([0-9a-zA-Z.-]+)/);
               return match ? { name: match[1], version: match[2] } : null;
             })
-            .filter(Boolean);
+            .filter((item): item is DependencyItem => item !== null);
 
           dependencyAnalysis.dependenciesCount = requirements.length;
           dependencyAnalysis.parsedDependencies = requirements.slice(0, 20); // Limit to top 20
         }
       } catch (error) {
-        console.warn('Could not parse requirements.txt:', error.message);
+        console.warn('Could not parse requirements.txt:', (error as Error).message);
       }
     }
 
@@ -287,7 +515,7 @@ async function analyzeGitHubRepository(repoUrl) {
             batches.push(dependencyAnalysis.parsedDependencies.slice(i, i + batchSize));
           }
 
-          let osvVulnerabilities = [];
+          let osvVulnerabilities: VulnerablePackage[] = [];
 
           for (const batch of batches) {
             const vulnerabilityPromises = batch.map(async dep => {
@@ -309,16 +537,17 @@ async function analyzeGitHubRepository(repoUrl) {
                 });
 
                 if (response.ok) {
-                  const data = await response.json();
+                  const data = (await response.json()) as ApiQueryResponse<OsvVulnerability>;
                   if (data.vulns && data.vulns.length > 0) {
                     // Process and return vulnerabilities
-                    return data.vulns.map(vuln => ({
-                      package: dep.name,
+                    return data.vulns.map((vuln: OsvVulnerability) => ({
+                      name: dep.name,
                       version: dep.version,
                       id: vuln.id,
                       details: vuln.summary || 'No summary provided',
                       severity: determineSeverity(vuln),
-                      fixedIn: extractFixedVersions(vuln)
+                      fixedIn: extractFixedVersions(vuln),
+                      package: dep.name
                     }));
                   }
                 }
@@ -326,7 +555,7 @@ async function analyzeGitHubRepository(repoUrl) {
               } catch (err) {
                 console.warn(
                   `Error checking vulnerability for ${dep.name}@${dep.version}:`,
-                  err.message
+                  (err as Error).message
                 );
                 return [];
               }
@@ -334,7 +563,7 @@ async function analyzeGitHubRepository(repoUrl) {
 
             // Wait for all vulnerability checks in this batch
             const batchResults = await Promise.all(vulnerabilityPromises);
-            osvVulnerabilities = osvVulnerabilities.concat(batchResults.flat());
+            osvVulnerabilities = [...osvVulnerabilities, ...batchResults.flat()];
 
             // Small delay to avoid rate limiting
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -357,18 +586,12 @@ async function analyzeGitHubRepository(repoUrl) {
             dependencyAnalysis.highSeverityCount = highSeverityVulns;
             dependencyAnalysis.mediumSeverityCount = mediumSeverityVulns;
             dependencyAnalysis.lowSeverityCount = lowSeverityVulns;
-            dependencyAnalysis.vulnerablePackages = osvVulnerabilities.map(v => ({
-              name: v.package,
-              severity: v.severity,
-              fixedIn: v.fixedIn,
-              id: v.id,
-              details: v.details
-            }));
+            dependencyAnalysis.vulnerablePackages = osvVulnerabilities;
             dependencyAnalysis.vulnerabilitySource = 'OSV';
           }
         }
       } catch (error) {
-        console.warn('Could not check OSV for vulnerabilities:', error.message);
+        console.warn('Could not check OSV for vulnerabilities:', (error as Error).message);
       }
     }
 
@@ -394,6 +617,8 @@ async function analyzeGitHubRepository(repoUrl) {
             batches.push(dependencyAnalysis.parsedDependencies.slice(i, i + batchSize));
           }
 
+          const outdatedDependencies: OutdatedDependency[] = [];
+
           for (const batch of batches) {
             const versionPromises = batch.map(async dep => {
               try {
@@ -405,7 +630,7 @@ async function analyzeGitHubRepository(repoUrl) {
                     `https://registry.npmjs.org/${encodeURIComponent(dep.name)}/latest`
                   );
                   if (npmResponse.ok) {
-                    const npmData = await npmResponse.json();
+                    const npmData = (await npmResponse.json()) as NpmResponse;
                     latestVersion = npmData.version;
                   }
                 }
@@ -415,7 +640,7 @@ async function analyzeGitHubRepository(repoUrl) {
                     `https://pypi.org/pypi/${encodeURIComponent(dep.name)}/json`
                   );
                   if (pypiResponse.ok) {
-                    const pypiData = await pypiResponse.json();
+                    const pypiData = (await pypiResponse.json()) as PyPiResponse;
                     latestVersion = pypiData.info.version;
                   }
                 }
@@ -434,58 +659,66 @@ async function analyzeGitHubRepository(repoUrl) {
                     const currentSemver = semver.coerce(cleanCurrentVersion);
                     const latestSemver = semver.coerce(cleanLatestVersion);
 
-                    const isMajorBehind = semver.major(latestSemver) > semver.major(currentSemver);
-                    const isMinorBehind =
-                      semver.major(latestSemver) === semver.major(currentSemver) &&
-                      semver.minor(latestSemver) > semver.minor(currentSemver);
-                    const isPatchBehind =
-                      semver.major(latestSemver) === semver.major(currentSemver) &&
-                      semver.minor(latestSemver) === semver.minor(currentSemver) &&
-                      semver.patch(latestSemver) > semver.patch(currentSemver);
+                    if (currentSemver && latestSemver) {
+                      const isMajorBehind =
+                        semver.major(latestSemver) > semver.major(currentSemver);
+                      const isMinorBehind =
+                        semver.major(latestSemver) === semver.major(currentSemver) &&
+                        semver.minor(latestSemver) > semver.minor(currentSemver);
+                      const isPatchBehind =
+                        semver.major(latestSemver) === semver.major(currentSemver) &&
+                        semver.minor(latestSemver) === semver.minor(currentSemver) &&
+                        semver.patch(latestSemver) > semver.patch(currentSemver);
 
-                    const versionsBehind = {
-                      major: semver.major(latestSemver) - semver.major(currentSemver),
-                      minor: isMinorBehind
-                        ? semver.minor(latestSemver) - semver.minor(currentSemver)
-                        : 0,
-                      patch: isPatchBehind
-                        ? semver.patch(latestSemver) - semver.patch(currentSemver)
-                        : 0
-                    };
-
-                    // Return outdated info if package is behind
-                    if (isMajorBehind || isMinorBehind || isPatchBehind) {
-                      return {
-                        name: dep.name,
-                        currentVersion: cleanCurrentVersion,
-                        latestVersion: cleanLatestVersion,
-                        isMajorBehind,
-                        isMinorBehind,
-                        isPatchBehind,
-                        versionsBehind,
-                        updateUrgency: isMajorBehind ? 'high' : isMinorBehind ? 'medium' : 'low'
+                      const versionsBehind = {
+                        major: semver.major(latestSemver) - semver.major(currentSemver),
+                        minor: isMinorBehind
+                          ? semver.minor(latestSemver) - semver.minor(currentSemver)
+                          : 0,
+                        patch: isPatchBehind
+                          ? semver.patch(latestSemver) - semver.patch(currentSemver)
+                          : 0
                       };
+
+                      // Return outdated info if package is behind
+                      if (isMajorBehind || isMinorBehind || isPatchBehind) {
+                        return {
+                          name: dep.name,
+                          version: dep.version,
+                          currentVersion: cleanCurrentVersion,
+                          latestVersion: cleanLatestVersion,
+                          isMajorBehind,
+                          isMinorBehind,
+                          isPatchBehind,
+                          versionsBehind,
+                          updateUrgency: isMajorBehind ? 'high' : isMinorBehind ? 'medium' : 'low'
+                        } as OutdatedDependency;
+                      }
                     }
                   }
                 }
                 return null;
               } catch (err) {
-                console.warn(`Error checking latest version for ${dep.name}:`, err.message);
+                console.warn(
+                  `Error checking latest version for ${dep.name}:`,
+                  (err as Error).message
+                );
                 return null;
               }
             });
 
             // Wait for all version checks in this batch
             const batchResults = await Promise.all(versionPromises);
-            const outdatedInBatch = batchResults.filter(Boolean);
-            dependencyAnalysis.outdatedDependencies = [
-              ...dependencyAnalysis.outdatedDependencies,
-              ...outdatedInBatch
-            ];
+            const outdatedInBatch = batchResults.filter(
+              (item): item is OutdatedDependency => item !== null
+            );
+            outdatedDependencies.push(...outdatedInBatch);
 
             // Small delay to avoid rate limiting
             await new Promise(resolve => setTimeout(resolve, 500));
           }
+
+          dependencyAnalysis.outdatedDependencies = outdatedDependencies;
 
           // Count outdated dependencies by severity
           dependencyAnalysis.majorOutdatedCount = dependencyAnalysis.outdatedDependencies.filter(
@@ -497,9 +730,19 @@ async function analyzeGitHubRepository(repoUrl) {
           ).length;
         }
       } catch (error) {
-        console.warn('Could not check for outdated dependencies:', error.message);
+        console.warn('Could not check for outdated dependencies:', (error as Error).message);
       }
     }
+
+    // --- Check for Contributing Guidelines ---
+    const contributingGuidelinesResponse = await fetchWithAuth(
+      `${apiUrl}/contents/CONTRIBUTING.md`
+    );
+    const hasContributingGuidelines = contributingGuidelinesResponse.ok;
+
+    // --- Check for Security Policy ---
+    const securityPolicyResponse = await fetchWithAuth(`${apiUrl}/contents/SECURITY.md`);
+    const hasSecurityPolicy = securityPolicyResponse.ok;
 
     // --- Check for Test Files ---
     const testDirResponses = await Promise.all([
@@ -533,11 +776,11 @@ async function analyzeGitHubRepository(repoUrl) {
 
     if (hasReadme) {
       try {
-        const readmeData = await readmeResponse.json();
+        const readmeData = (await readmeResponse.json()) as ContentResponse;
         readmeUrl = readmeData.html_url; // GitHub URL to view the full README
 
         // Decode README content if not too large
-        if (readmeData.content && readmeData.size < 100000) {
+        if (readmeData.content && readmeData.size && readmeData.size < 100000) {
           // avoid trying to process huge READMEs
           const fullReadme = Buffer.from(readmeData.content, 'base64').toString('utf8');
 
@@ -565,9 +808,10 @@ async function analyzeGitHubRepository(repoUrl) {
               /!\[.*?\]\(.*?shield.*?\)/i.test(trimmed) || // Shield image links
               /\[!\[.*?\]\(.*?\)\]\(.*?\)/i.test(trimmed) || // Linked badge pattern
               // Skip lines with multiple image links (likely badge rows)
-              (trimmed.match(/!\[/g) && trimmed.match(/!\[/g).length > 1) ||
+              (trimmed.match(/!\[/g)?.length && trimmed.match(/!\[/g)!.length > 1) ||
               // Skip lines that are mostly image links and little text
-              (trimmed.match(/!\[/g) && trimmed.match(/!\[/g).length / trimmed.length > 0.1)
+              (trimmed.match(/!\[/g)?.length &&
+                trimmed.match(/!\[/g)!.length / trimmed.length > 0.1)
             ) {
               continue;
             }
@@ -604,7 +848,7 @@ async function analyzeGitHubRepository(repoUrl) {
           readmeExcerpt = excerpt;
         }
       } catch (error) {
-        console.warn('Could not parse README:', error.message);
+        console.warn('Could not parse README:', (error as Error).message);
       }
     }
 
@@ -634,7 +878,7 @@ async function analyzeGitHubRepository(repoUrl) {
 
     // --- Check for Releases ---
     const releasesResponse = await fetchWithAuth(`${apiUrl}/releases`);
-    let releaseInfo = {
+    let releaseInfo: ReleaseInfo = {
       hasReleases: false,
       releaseCount: 0,
       latestReleaseDate: null,
@@ -643,7 +887,7 @@ async function analyzeGitHubRepository(repoUrl) {
     };
 
     if (releasesResponse.ok) {
-      const releases = await releasesResponse.json();
+      const releases = (await releasesResponse.json()) as GitHubRelease[];
       releaseInfo.hasReleases = releases.length > 0;
       releaseInfo.releaseCount = releases.length;
 
@@ -651,7 +895,7 @@ async function analyzeGitHubRepository(repoUrl) {
         const latestRelease = releases[0];
         releaseInfo.latestReleaseDate = new Date(latestRelease.published_at);
         releaseInfo.daysSinceLastRelease = Math.floor(
-          (Date.now() - releaseInfo.latestReleaseDate) / (1000 * 60 * 60 * 24)
+          (Date.now() - releaseInfo.latestReleaseDate.getTime()) / (1000 * 60 * 60 * 24)
         );
 
         // Check if using semver (e.g., v1.0.0)
@@ -662,29 +906,18 @@ async function analyzeGitHubRepository(repoUrl) {
 
     // --- Fetch Commit Activity (rough estimate of frequency) ---
     const commitsResponse = await fetchWithAuth(`${apiUrl}/commits?per_page=100`); // Get last 100 commits
-    const commits = await commitsResponse.json();
+    const commits = (await commitsResponse.json()) as GitHubCommit[];
     const numberOfCommits = commits.length;
     const lastCommitDate = commits.length > 0 ? new Date(commits[0].commit.author.date) : null;
     const daysSinceLastCommit = lastCommitDate
-      ? Math.floor((Date.now() - lastCommitDate) / (1000 * 60 * 60 * 24))
+      ? Math.floor((Date.now() - lastCommitDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
-
-    // --- Check for Contributing Guidelines ---
-    const contributingResponse = await fetchWithAuth(`${apiUrl}/contents/CONTRIBUTING.md`);
-    const hasContributingGuidelines = contributingResponse.ok;
-
-    // --- Fetch Security Information (Limited via API) ---
-    const securityFileResponses = await Promise.all([
-      fetchWithAuth(`${apiUrl}/contents/SECURITY.md`),
-      fetchWithAuth(`${apiUrl}/contents/SECURITY.txt`)
-    ]);
-    const hasSecurityPolicy = securityFileResponses.some(response => response.ok);
 
     // --- Fetch Open Pull Requests ---
     const pullsResponse = await fetchWithAuth(`${apiUrl}/pulls?state=open`);
-    const openPulls = await pullsResponse.json();
+    const openPulls = (await pullsResponse.json()) as any[];
     const longLivingPulls = openPulls.filter(pull => {
-      const createdDate = new Date(pull.created_at);
+      const createdDate = new Date(pull.created_at).getTime();
       const ageInDays = Math.floor((Date.now() - createdDate) / (1000 * 60 * 60 * 24));
       return ageInDays > 90; // Consider PRs open for more than 90 days as long-lived
     });
@@ -693,17 +926,17 @@ async function analyzeGitHubRepository(repoUrl) {
     const issuesResponse = await fetchWithAuth(
       `${apiUrl}/issues?state=open&sort=created&direction=asc`
     );
-    const openIssues = await issuesResponse.json();
+    const openIssues = (await issuesResponse.json()) as GitHubIssue[];
     // Filter out pull requests from the issues list
     const actualOpenIssues = openIssues.filter(issue => !issue.pull_request);
     const longLivingIssues = actualOpenIssues.filter(issue => {
-      const createdDate = new Date(issue.created_at);
+      const createdDate = new Date(issue.created_at).getTime();
       const ageInDays = Math.floor((Date.now() - createdDate) / (1000 * 60 * 60 * 24));
       return ageInDays > 180; // Consider issues open for more than 180 days as long-lived
     });
 
     // --- Calculate Response Time Metrics ---
-    let responseTimeMetrics = null;
+    let responseTimeMetrics: ResponseTimeMetrics | null = null;
 
     if (actualOpenIssues && actualOpenIssues.length > 0) {
       // Get a sample of recently closed issues to check response time
@@ -712,7 +945,7 @@ async function analyzeGitHubRepository(repoUrl) {
       );
 
       if (closedIssuesResponse.ok) {
-        const closedIssues = await closedIssuesResponse.json();
+        const closedIssues = (await closedIssuesResponse.json()) as GitHubIssue[];
         const issuesWithComments = [];
 
         // Get response times for a sample of issues
@@ -721,12 +954,12 @@ async function analyzeGitHubRepository(repoUrl) {
             // Exclude PRs from this analysis
             const commentsResponse = await fetchWithAuth(issue.comments_url);
             if (commentsResponse.ok) {
-              const comments = await commentsResponse.json();
+              const comments = (await commentsResponse.json()) as GitHubComment[];
               if (comments.length > 0) {
                 const createdDate = new Date(issue.created_at);
                 const firstResponseDate = new Date(comments[0].created_at);
                 const responseTimeHours = Math.floor(
-                  (firstResponseDate - createdDate) / (1000 * 60 * 60)
+                  (firstResponseDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60)
                 );
 
                 issuesWithComments.push({
@@ -845,7 +1078,10 @@ async function analyzeGitHubRepository(repoUrl) {
     if (!releaseInfo.hasReleases) {
       riskScore += 1;
       riskFactors.push('No formal releases found.');
-    } else if (releaseInfo.daysSinceLastRelease > 365) {
+    } else if (
+      releaseInfo.daysSinceLastRelease !== null &&
+      releaseInfo.daysSinceLastRelease > 365
+    ) {
       riskScore += 2;
       riskFactors.push('No releases in over a year.');
     } else if (!releaseInfo.usesSemanticVersioning) {
@@ -913,21 +1149,24 @@ async function analyzeGitHubRepository(repoUrl) {
     }
 
     // Add vulnerability scoring
-    if (dependencyAnalysis.highSeverityCount > 0) {
+    if (dependencyAnalysis.highSeverityCount !== null && dependencyAnalysis.highSeverityCount > 0) {
       riskScore += 3;
       riskFactors.push(
         `${dependencyAnalysis.highSeverityCount} high severity vulnerabilities found.`
       );
     }
 
-    if (dependencyAnalysis.mediumSeverityCount > 0) {
+    if (
+      dependencyAnalysis.mediumSeverityCount !== null &&
+      dependencyAnalysis.mediumSeverityCount > 0
+    ) {
       riskScore += 2;
       riskFactors.push(
         `${dependencyAnalysis.mediumSeverityCount} medium severity vulnerabilities found.`
       );
     }
 
-    if (dependencyAnalysis.lowSeverityCount > 0) {
+    if (dependencyAnalysis.lowSeverityCount !== null && dependencyAnalysis.lowSeverityCount > 0) {
       riskScore += 1;
       riskFactors.push(
         `${dependencyAnalysis.lowSeverityCount} low severity vulnerabilities found.`
@@ -960,7 +1199,7 @@ async function analyzeGitHubRepository(repoUrl) {
     }
 
     // Adjust risk rating scale for the new factors
-    let riskRating = 'Low';
+    let riskRating: 'N/A' | 'Low' | 'Medium' | 'High' = 'Low';
     if (riskScore > 15) {
       // Adjusted threshold
       riskRating = 'High';
@@ -995,7 +1234,7 @@ ${readmeExcerpt}
 | Recent Commits | ${numberOfCommits} commits found in the last 100 |
 | Last Activity | ${
       daysSinceLastCommit !== null
-        ? `${daysSinceLastCommit} days ago (${lastCommitDate.toLocaleDateString()})`
+        ? `${daysSinceLastCommit} days ago (${lastCommitDate ? lastCommitDate.toLocaleDateString() : 'N/A'})`
         : 'N/A'
     } |
 | Contributing Guidelines | ${hasContributingGuidelines ? '✅ Present' : '❌ Missing'} |
@@ -1173,14 +1412,14 @@ ${
   } catch (error) {
     console.error('An error occurred:', error);
     return {
-      markdownSummary: `Error during analysis: ${error.message}`,
+      markdownSummary: `Error during analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
       riskScore: 'N/A'
     };
   }
 }
 
 // Helper function to determine severity from OSV vulnerability data
-function determineSeverity(vulnerability) {
+function determineSeverity(vulnerability: OsvVulnerability): string {
   // Try to extract CVSS score
   let cvssScore = null;
 
@@ -1217,10 +1456,10 @@ function determineSeverity(vulnerability) {
 }
 
 // Helper function to extract fixed versions from OSV data
-function extractFixedVersions(vulnerability) {
+function extractFixedVersions(vulnerability: OsvVulnerability): string {
   if (!vulnerability.affected || !vulnerability.affected.length) return 'unknown';
 
-  const fixedVersions = [];
+  const fixedVersions: string[] = [];
 
   vulnerability.affected.forEach(affected => {
     if (affected.ranges) {
@@ -1238,5 +1477,3 @@ function extractFixedVersions(vulnerability) {
 
   return fixedVersions.length > 0 ? fixedVersions.join(', ') : 'unknown';
 }
-
-module.exports = { analyzeGitHubRepository };

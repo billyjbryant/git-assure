@@ -1,5 +1,7 @@
 module.exports = {
-  collectCoverageFrom: ['src/**/*.js', '!**/node_modules/**'],
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  collectCoverageFrom: ['src/**/*.ts', '!**/node_modules/**'],
   coverageThreshold: {
     global: {
       branches: 70,
@@ -8,7 +10,14 @@ module.exports = {
       statements: 70
     }
   },
-  testEnvironment: 'node',
-  testMatch: ['**/test/**/*.js', '**/?(*.)+(spec|test).js'],
-  testPathIgnorePatterns: ['/node_modules/']
+  testMatch: ['**/test/**/*.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        tsconfig: 'tsconfig.test.json'
+      }
+    ]
+  }
 };

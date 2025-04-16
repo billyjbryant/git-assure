@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-const { main } = require('../src/cli');
+// When built, the TypeScript files will be compiled to JavaScript in the dist directory
+const { main } = require('../dist/src/cli');
 
 // Execute the CLI
 main();

@@ -1,17 +1,23 @@
-const fs = require('fs').promises;
-const { analyzeGitHubRepository } = require('./analyzer');
+import { promises as fs } from 'fs';
+import { analyzeGitHubRepository } from './analyzer';
 
-async function main() {
-  console.log('GitAssure - Repository Analysis Tool');
+interface AnalysisResult {
+  markdownSummary: string;
+  riskScore: number | string;
+  riskRating?: string;
+}
+
+export async function main(): Promise<void> {
+  console.log('Git-Assure - Repository Analysis Tool');
   console.log('-----------------------------------');
   console.log('This tool analyzes GitHub repositories for sustainability and security risks.');
   console.log('It provides a risk score and detailed markdown summary based on various factors.');
   console.log('-----------------------------------');
 
   // Get command line arguments
-  const args = process.argv.slice(2);
-  let repoUrl = '';
-  let outputFile = '';
+  const args: string[] = process.argv.slice(2);
+  let repoUrl: string = '';
+  let outputFile: string = '';
 
   // Parse command line arguments
   for (let i = 0; i < args.length; i++) {
@@ -39,7 +45,7 @@ async function main() {
 
   try {
     console.log(`Analyzing repository: ${repoUrl}`);
-    const analysisResult = await analyzeGitHubRepository(repoUrl);
+    const analysisResult: AnalysisResult = await analyzeGitHubRepository(repoUrl);
 
     // Output to file if specified
     if (outputFile) {
@@ -52,8 +58,9 @@ async function main() {
 
     console.log(`Overall Risk Score: ${analysisResult.riskScore} (${analysisResult.riskRating})`);
   } catch (error) {
-    console.error(`Error during analysis: ${error.message}`);
-    throw new Error(`Analysis failed: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Error during analysis: ${errorMessage}`);
+    throw new Error(`Analysis failed: ${errorMessage}`);
   }
 }
 
@@ -61,5 +68,3 @@ async function main() {
 if (require.main === module) {
   main();
 }
-
-module.exports = { main };

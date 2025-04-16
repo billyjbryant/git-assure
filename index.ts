@@ -5,8 +5,6 @@
  * This module exports the core functionality of the analyzer.
  */
 
-const { analyzeGitHubRepository } = require('./src/analyzer');
+import { analyzeGitHubRepository } from './src/analyzer';
 
-module.exports = {
-  analyzeGitHubRepository
-};
+export { analyzeGitHubRepository };

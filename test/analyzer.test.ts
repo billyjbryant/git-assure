@@ -1,5 +1,5 @@
-const nock = require('nock');
-const { analyzeGitHubRepository } = require('../src/analyzer');
+import nock from 'nock';
+import { analyzeGitHubRepository } from '../src/analyzer';
 
 // Disable actual HTTP requests during testing
 beforeAll(() => {
@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 // Helper function to mock all common API calls with 404 responses (resources not found)
-function mockCommonApiEndpoints() {
+function mockCommonApiEndpoints(): void {
   // Mock tests directory checks
   ['tests', 'test', '__tests__', 'spec'].forEach(dir => {
     nock('https://api.github.com').get(`/repos/owner/repo/contents/${dir}`).reply(404);

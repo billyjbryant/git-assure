@@ -1,10 +1,16 @@
-const fs = require('fs').promises;
-const core = require('@actions/core');
-const github = require('@actions/github');
-const { analyzeGitHubRepository } = require('./analyzer');
+import { promises as fs } from 'fs';
+import * as core from '@actions/core';
+import * as github from '@actions/github';
+import { analyzeGitHubRepository } from './analyzer';
+
+interface AnalysisResult {
+  markdownSummary: string;
+  riskScore: number | string;
+  riskRating: string;
+}
 
 // Main function for GitHub Actions
-async function run() {
+export async function run(): Promise<void> {
   try {
     // Get inputs from the workflow
     const repository = core.getInput('repository');
@@ -13,7 +19,7 @@ async function run() {
     const commentMode = core.getInput('comment-mode');
 
     // Determine the repository URL
-    let repoUrl;
+    let repoUrl: string;
     if (repository.includes('github.com')) {
       // It's already a full URL
       repoUrl = repository;
@@ -39,6 +45,11 @@ async function run() {
     core.debug(`Analyzing repository: ${repoUrl}`);
     const analysisResult = await analyzeGitHubRepository(repoUrl);
 
+    // Ensure riskRating is always defined
+    if (!analysisResult.riskRating) {
+      analysisResult.riskRating = 'N/A';
+    }
+
     // Set outputs for GitHub Actions
     core.setOutput('risk-score', analysisResult.riskScore);
     core.setOutput('risk-rating', analysisResult.riskRating);
@@ -61,32 +72,47 @@ async function run() {
 
     // Comment on PR if requested and in a PR context
     if (commentOnPr && token && github.context.payload.pull_request) {
-      await commentOnPullRequest(token, analysisResult, commentMode);
+      // Ensure riskRating is defined before passing to the function
+      const safeAnalysisResult = {
+        ...analysisResult,
+        riskRating: analysisResult.riskRating || 'N/A'
+      };
+      await commentOnPullRequest(token, safeAnalysisResult, commentMode);
     }
   } catch (error) {
-    core.setFailed(`Analysis failed: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    core.setFailed(`Analysis failed: ${errorMessage}`);
   }
 }
 
 /**
  * Posts the analysis results as a comment on the current pull request
  *
- * @param {string} token - GitHub token
- * @param {Object} analysisResult - The result of the repository analysis
- * @param {string} commentMode - How to post comments: 'create-new' or 'update-existing'
+ * @param token - GitHub token
+ * @param analysisResult - The result of the repository analysis
+ * @param commentMode - How to post comments: 'create-new' or 'update-existing'
  */
-async function commentOnPullRequest(token, analysisResult, commentMode) {
+async function commentOnPullRequest(
+  token: string,
+  analysisResult: AnalysisResult,
+  commentMode: string
+): Promise<void> {
   try {
     const octokit = github.getOctokit(token);
     const context = github.context;
     const { owner, repo } = context.repo;
-    const pull_number = context.payload.pull_request.number;
+    const pull_number = context.payload.pull_request?.number;
+
+    if (!pull_number) {
+      core.warning('Could not determine pull request number.');
+      return;
+    }
 
     core.info(`Commenting on PR #${pull_number}`);
 
     // Create a comment header that uniquely identifies our comment for later updates
-    const commentHeader = '## GitHub Repository Analyzer Report';
-    const commentTag = '<!-- github-repo-analyzer-comment -->';
+    const commentHeader = '## Git-Assure Report';
+    const commentTag = '<!-- git-assure-comment -->';
 
     // Prepare the comment content
     const commentBody = `${commentTag}
@@ -99,7 +125,7 @@ Repository analyzed on: ${new Date().toISOString().split('T')[0]}
 ${analysisResult.markdownSummary}
 
 ---
-*This analysis was performed automatically by [GitHub Repository Analyzer](https://github.com/billyjbryant/github-repo-analyzer)*`;
+*This analysis was performed automatically by [Git-Assure](https://github.com/billyjbryant/git-assure)*`;
 
     if (commentMode === 'update-existing') {
       // Try to find and update an existing comment
@@ -110,7 +136,7 @@ ${analysisResult.markdownSummary}
       });
 
       // Look for our previous comment by checking for the tag
-      const existingComment = comments.find(comment => comment.body.includes(commentTag));
+      const existingComment = comments.find(comment => (comment.body ?? '').includes(commentTag));
 
       if (existingComment) {
         // Update the existing comment
@@ -135,7 +161,8 @@ ${analysisResult.markdownSummary}
 
     core.info('Created new analysis comment on PR');
   } catch (error) {
-    core.warning(`Failed to comment on PR: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    core.warning(`Failed to comment on PR: ${errorMessage}`);
   }
 }
 
