@@ -1,0 +1,106 @@
+name: Pre-release
+
+on:
+  pull_request:
+    types: [labeled]
+    branches:
+      - main
+
+jobs:
+  prerelease:
+    name: GitAssure Pre-release
+    # Only run this workflow when the 'prerelease' label is added
+    if: contains(github.event.label.name, 'prerelease')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract branch info
+        id: branch_info
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Get sanitized branch name
+            const branchName = context.payload.pull_request.head.ref.replace(/\//g, '-');
+            console.log(`Branch name: ${branchName}`);
+
+            // Set outputs
+            core.setOutput('branch_name', branchName);
+            core.exportVariable('BRANCH_NAME', branchName);
+
+      - name: Wait for approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ github.repository_owner }}
+          minimum-approvals: 1
+          issue-title: 'Approve pre-release for PR #${{ github.event.pull_request.number }}'
+          issue-body: 'A pre-release has been requested for PR #${{ github.event.pull_request.number }} from branch `${{ steps.branch_info.outputs.branch_name }}`. Please approve to trigger the pre-release.'
+          exclude-workflow-initiator-as-approver: false
+
+      - name: Create custom pre-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          BRANCH_NAME: ${{ steps.branch_info.outputs.branch_name }}
+        run: |
+          # Configure git for the release process
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+          # Use semantic-release for the prerelease with custom prerelease ID
+          npx semantic-release --dry-run --no-ci --preset angular \
+            --branches ${{ github.head_ref }} \
+            --prerelease "pre-${BRANCH_NAME}" \
+            --plugins @semantic-release/commit-analyzer,@semantic-release/release-notes-generator,@semantic-release/changelog,@semantic-release/npm,@semantic-release/git,@semantic-release/github
+
+      - name: Comment on PR
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            try {
+              if (fs.existsSync('./package.json')) {
+                const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+                const version = pkg.version;
+                const branchName = process.env.BRANCH_NAME;
+                
+                github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: `🚀 Pre-release version **${version}** has been created for branch \`${branchName}\`.\n\nThis is a test release and won't update the main version of the package.`
+                });
+              } else {
+                github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: `⚠️ Could not determine pre-release version. Please check the workflow logs.`
+                });
+              }
+            } catch (error) {
+              console.error('Error commenting on PR:', error);
+            }

@@ -1,0 +1,37 @@
+name: 'GitAssure Repository Analyzer'
+description: 'Analyze GitHub repositories for sustainability and security risks'
+author: 'BillyJBryant'
+inputs:
+  repository:
+    description: 'The GitHub repository to analyze (format: owner/repo or full URL)'
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: 'GitHub token for API authentication'
+    required: false
+    default: ${{ github.token }}
+  output-file:
+    description: 'File path to save analysis results'
+    required: false
+    default: ''
+  comment-on-pr:
+    description: 'Whether to comment on PR with analysis results'
+    required: false
+    default: 'false'
+  comment-mode:
+    description: "How to handle PR comments: 'create-new' or 'update-existing'"
+    required: false
+    default: 'update-existing'
+outputs:
+  risk-score:
+    description: 'The numeric risk score (0-10)'
+  risk-rating:
+    description: 'Risk rating (Low, Medium, High)'
+  summary:
+    description: 'Markdown summary of the analysis'
+runs:
+  using: 'node20'
+  main: 'src/action.js'
+branding:
+  icon: 'shield'
+  color: 'green'

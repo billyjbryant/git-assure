@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: Release GitAssure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create release
+      issues: write # to create release notes
+      pull-requests: write # to create release notes
+
+    outputs:
+      release_type: ${{ steps.determine_release_type.outputs.release_type }}
+      source_branch: ${{ steps.determine_release_type.outputs.source_branch }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine release type from PR labels
+        id: determine_release_type
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Function to get PR number from a merge commit
+            const getPRNumberFromCommit = async (sha) => {
+              const { data: commit } = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: sha
+              });
+              
+              const prMatch = commit.commit.message.match(/Merge pull request #(\d+) from/);
+              return prMatch ? parseInt(prMatch[1], 10) : null;
+            };
+
+            // Main function to determine release type
+            async function determineReleaseType() {
+              console.log(`Checking commit ${context.sha} in ${context.repo.owner}/${context.repo.repo}...`);
+              
+              // Get PR number from merge commit
+              const prNumber = await getPRNumberFromCommit(context.sha);
+              
+              if (!prNumber) {
+                console.log('This is not a merge commit from a PR. Using default release process.');
+                return { releaseType: 'auto', sourceBranch: null };
+              }
+              
+              console.log(`Found PR #${prNumber}. Fetching labels and branch info...`);
+              
+              // Fetch the PR to get labels and source branch
+              const { data: pullRequest } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber
+              });
+              
+              const labels = pullRequest.labels.map(label => label.name);
+              const sourceBranch = pullRequest.head.ref.replace(/\//g, '-');
+              
+              console.log(`PR labels: ${labels.join(', ')}`);
+              console.log(`Source branch: ${sourceBranch}`);
+              
+              // Determine release type based on labels
+              let releaseType = 'auto';
+              
+              if (labels.includes('major')) {
+                console.log('🚀 Major release detected!');
+                releaseType = 'major';
+              } else if (labels.includes('minor')) {
+                console.log('✨ Minor release detected!');
+                releaseType = 'minor';
+              } else if (labels.includes('patch')) {
+                console.log('🔧 Patch release detected!');
+                releaseType = 'patch';
+              } else if (labels.includes('prerelease')) {
+                console.log('🔖 Prerelease detected!');
+                releaseType = 'prerelease';
+              } else {
+                console.log('No specific release label found. Using default semantic-release process.');
+              }
+              
+              return { releaseType, sourceBranch };
+            }
+
+            // Execute and set outputs
+            try {
+              const result = await determineReleaseType();
+              
+              // Set outputs for use in subsequent steps
+              core.setOutput('release_type', result.releaseType);
+              core.setOutput('source_branch', result.sourceBranch || 'unknown');
+              
+              // Also set environment variables for convenience
+              core.exportVariable('RELEASE_TYPE', result.releaseType);
+              core.exportVariable('SOURCE_BRANCH', result.sourceBranch || 'unknown');
+            } catch (error) {
+              console.error('Error determining release type:', error);
+              core.setOutput('release_type', 'auto');
+              core.setOutput('source_branch', 'unknown');
+              core.exportVariable('RELEASE_TYPE', 'auto');
+              core.exportVariable('SOURCE_BRANCH', 'unknown');
+            }
+
+      - name: Release with label-based type
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "$RELEASE_TYPE" = "major" ]; then
+            npx semantic-release --verbose --force-release=major
+          elif [ "$RELEASE_TYPE" = "minor" ]; then
+            npx semantic-release --verbose --force-release=minor
+          elif [ "$RELEASE_TYPE" = "patch" ]; then
+            npx semantic-release --verbose --force-release=patch
+          elif [ "$RELEASE_TYPE" = "prerelease" ]; then
+            # Use custom prerelease identifier with branch name
+            npx semantic-release --verbose --prerelease "pre-${SOURCE_BRANCH}"
+          else
+            npx semantic-release --verbose
+          fi
