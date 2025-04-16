@@ -1,1 +1,6 @@
+# shellcheck disable=SC2148
+# Run tests
+npm test
+
+# Run lint-staged
 npx lint-staged

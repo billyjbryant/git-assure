@@ -20,7 +20,7 @@
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write .",
-    "prepare": "husky install && npm run build",
+    "prepare": "husky && npm run build",
     "prepublishOnly": "npm test && npm run lint"
   },
   "dependencies": {
