@@ -4,6 +4,24 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (auto, major, minor, patch, prerelease)'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - major
+          - minor
+          - patch
+          - prerelease
+      prerelease_id:
+        description: 'Prerelease identifier (only used when release_type is prerelease)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   release:
@@ -29,17 +47,48 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: 'yarn'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --frozen-lockfile
 
-      - name: Determine release type from PR labels
+      - name: Run tests
+        run: yarn test
+        env:
+          CI: true
+
+      - name: Run lint
+        run: yarn lint
+        env:
+          CI: true
+
+      - name: Determine release type from PR labels or manual input
         id: determine_release_type
         uses: actions/github-script@v6
         with:
           script: |
+            // Check if this is a manual workflow dispatch
+            if (context.eventName === 'workflow_dispatch') {
+              console.log('Manual workflow dispatch detected');
+              
+              const manualReleaseType = context.payload.inputs.release_type;
+              const preReleaseId = context.payload.inputs.prerelease_id || 'manual';
+              
+              console.log(`Manual release type: ${manualReleaseType}`);
+              if (manualReleaseType === 'prerelease' && context.payload.inputs.prerelease_id) {
+                console.log(`With prerelease ID: ${preReleaseId}`);
+              }
+              
+              core.setOutput('release_type', manualReleaseType);
+              core.setOutput('source_branch', 'manual');
+              core.exportVariable('RELEASE_TYPE', manualReleaseType);
+              core.exportVariable('SOURCE_BRANCH', 'manual');
+              core.exportVariable('PRERELEASE_ID', preReleaseId);
+              
+              return;
+            }
+
             // Function to get PR number from a merge commit
             const getPRNumberFromCommit = async (sha) => {
               const { data: commit } = await github.rest.repos.getCommit({
@@ -120,7 +169,7 @@ jobs:
               core.exportVariable('SOURCE_BRANCH', 'unknown');
             }
 
-      - name: Release with label-based type
+      - name: Release with label-based or manual type
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -132,8 +181,12 @@ jobs:
           elif [ "$RELEASE_TYPE" = "patch" ]; then
             npx semantic-release --verbose --force-release=patch
           elif [ "$RELEASE_TYPE" = "prerelease" ]; then
-            # Use custom prerelease identifier with branch name
-            npx semantic-release --verbose --prerelease "pre-${SOURCE_BRANCH}"
+            # Use custom prerelease identifier if provided, otherwise use branch name
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$PRERELEASE_ID" ]; then
+              npx semantic-release --verbose --prerelease "$PRERELEASE_ID"
+            else
+              npx semantic-release --verbose --prerelease "pre-${SOURCE_BRANCH}"
+            fi
           else
             npx semantic-release --verbose
           fi

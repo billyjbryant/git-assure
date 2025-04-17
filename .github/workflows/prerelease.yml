@@ -12,6 +12,8 @@ jobs:
     # Only run this workflow when the 'prerelease' label is added
     if: contains(github.event.label.name, 'prerelease')
     runs-on: ubuntu-latest
+    # Add the environment configuration for requiring approval
+    environment: prerelease-approval
     permissions:
       contents: write
       pull-requests: write
@@ -30,11 +32,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: 'yarn'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn ci
+
+      - name: Run tests
+        run: yarn test
+        env:
+          CI: true
+
+      - name: Run lint
+        run: yarn lint
+        env:
+          CI: true
 
       - name: Extract branch info
         id: branch_info
@@ -49,15 +61,7 @@ jobs:
             core.setOutput('branch_name', branchName);
             core.exportVariable('BRANCH_NAME', branchName);
 
-      - name: Wait for approval
-        uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: ${{ github.repository_owner }}
-          minimum-approvals: 1
-          issue-title: 'Approve pre-release for PR #${{ github.event.pull_request.number }}'
-          issue-body: 'A pre-release has been requested for PR #${{ github.event.pull_request.number }} from branch `${{ steps.branch_info.outputs.branch_name }}`. Please approve to trigger the pre-release.'
-          exclude-workflow-initiator-as-approver: false
+      # The wait for approval step is now handled by the environment configuration
 
       - name: Create custom pre-release
         env:

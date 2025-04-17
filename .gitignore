@@ -72,7 +72,7 @@ tmp/
 temp/
 
 # Generated files from npm/yarn
-yarn.lock
+
 # Comment out the above if you're using them for dependency locking
 
 # Don't ignore these files, needed for bootstrapping
