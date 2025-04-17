@@ -5,6 +5,14 @@ on:
     branches: ['**']
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+  statuses: write
+  checks: write
+
 jobs:
   build-and-test:
     name: Build and Test
