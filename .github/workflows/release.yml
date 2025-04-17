@@ -175,14 +175,29 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ "$RELEASE_TYPE" = "major" ]; then
-            npx semantic-release --verbose --force-release=major
+            # Force a major release with a simulated breaking change commit
+            git config user.name "${GITHUB_ACTOR}"
+            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+            git commit --allow-empty -m "BREAKING CHANGE: Force major version bump via manual workflow"
+            npx semantic-release --verbose
           elif [ "$RELEASE_TYPE" = "minor" ]; then
-            npx semantic-release --verbose --force-release=minor
+            # Force a minor release with a simulated feature commit
+            git config user.name "${GITHUB_ACTOR}"
+            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+            git commit --allow-empty -m "feat: Force minor version bump via manual workflow"
+            npx semantic-release --verbose
           elif [ "$RELEASE_TYPE" = "patch" ]; then
-            npx semantic-release --verbose --force-release=patch
+            # Force a patch release with a simulated fix commit
+            git config user.name "${GITHUB_ACTOR}"
+            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+            git commit --allow-empty -m "fix: Force patch version bump via manual workflow"
+            npx semantic-release --verbose
           elif [ "$RELEASE_TYPE" = "prerelease" ]; then
             # Use custom prerelease identifier if provided, otherwise use branch name
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$PRERELEASE_ID" ]; then
+              git config user.name "${GITHUB_ACTOR}"
+              git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+              git commit --allow-empty -m "feat: Force prerelease version bump via manual workflow"
               npx semantic-release --verbose --prerelease "$PRERELEASE_ID"
             else
               npx semantic-release --verbose --prerelease "pre-${SOURCE_BRANCH}"
