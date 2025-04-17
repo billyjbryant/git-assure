@@ -1,3 +1,9 @@
+## [0.0.3](https://github.com/billyjbryant/git-assure/compare/v0.0.2...v0.0.3) (2025-04-17)
+
+### Bug Fixes
+
+- Adding in npm-shrinkwrap for npm releases ([8e24f7b](https://github.com/billyjbryant/git-assure/commit/8e24f7b63dcc81fd23a9b0f84d2288314e276c75))
+
 ## [0.0.2](https://github.com/billyjbryant/git-assure/compare/v0.0.1...v0.0.2) (2025-04-17)
 
 ### Bug Fixes
