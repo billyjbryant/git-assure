@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "git-assure": "./bin/git-assure"
+    "git-assure": "./bin/git-assure",
+    "repo-analyzer": "./bin/repo-analyzer"
   },
   "type": "commonjs",
   "scripts": {
