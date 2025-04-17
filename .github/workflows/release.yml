@@ -83,6 +83,23 @@ jobs:
         env:
           CI: true
 
+      - name: Build package
+        run: yarn build
+
+      - name: Verify dist directory exists
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Error: dist directory not found. Build may have failed."
+            exit 1
+          fi
+
+          if [ ! -f "dist/src/cli.js" ]; then
+            echo "Error: CLI module not found in dist. Build may be incomplete."
+            exit 1
+          fi
+
+          echo "Build artifacts verified successfully."
+
       - name: Determine release type from PR labels or manual input
         id: determine_release_type
         uses: actions/github-script@v6
@@ -198,17 +215,31 @@ jobs:
           git config --global user.name 'Publisher Bot'
           git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>'
 
+          # Make sure build artifacts are included in the release
+          echo "Ensuring build artifacts are included..."
+          if [ ! -d "dist" ]; then
+            echo "Running build again to ensure dist directory exists..."
+            yarn build
+          fi
+
           # Get the release type and source branch from the outputs
           RELEASE_TYPE="${{ steps.determine_release_type.outputs.release_type }}"
           if [ "$RELEASE_TYPE" = "major" ]; then
-            npx semantic-release --verbose --force-release=major
+            # Force a major release with a simulated breaking change commit
+            git commit --allow-empty -m "BREAKING CHANGE: Force major version bump via manual workflow"
+            npx semantic-release --verbose
           elif [ "$RELEASE_TYPE" = "minor" ]; then
-            npx semantic-release --verbose --force-release=minor
+            # Force a minor release with a simulated feature commit
+            git commit --allow-empty -m "feat: Force minor version bump via manual workflow"
+            npx semantic-release --verbose
           elif [ "$RELEASE_TYPE" = "patch" ]; then
-            npx semantic-release --verbose --force-release=patch
+            # Force a patch release with a simulated fix commit
+            git commit --allow-empty -m "fix: Force patch version bump via manual workflow"
+            npx semantic-release --verbose
           elif [ "$RELEASE_TYPE" = "prerelease" ]; then
             # Use custom prerelease identifier if provided, otherwise use branch name
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$PRERELEASE_ID" ]; then
+              git commit --allow-empty -m "feat: Force prerelease version bump via manual workflow"
               npx semantic-release --verbose --prerelease "$PRERELEASE_ID"
             else
               npx semantic-release --verbose --prerelease "pre-${SOURCE_BRANCH}"

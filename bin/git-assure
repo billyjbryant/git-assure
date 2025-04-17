@@ -1,7 +1,50 @@
 #!/usr/bin/env node
 
-// When built, the TypeScript files will be compiled to JavaScript in the dist directory
-const { main } = require('../dist/src/cli');
+// Use path for more reliable file resolution
+const path = require('path');
+
+// Get the directory where this script resides
+const scriptDir = __dirname;
+
+// Calculate the package root directory (one level up from bin/)
+const packageRoot = path.resolve(scriptDir, '..');
+
+// Try to load the CLI module with multiple possible paths
+let cli;
+try {
+  // Try the expected compiled path first
+  cli = require(path.join(packageRoot, 'dist/src/cli'));
+} catch (err) {
+  try {
+    // Fallback to the source directly (for development/ts-node usage)
+    cli = require(path.join(packageRoot, 'src/cli'));
+  } catch (innerErr) {
+    console.error('Error loading CLI module:');
+    console.error(err.message);
+    console.error('Also tried source path but failed:');
+    console.error(innerErr.message);
+    console.error('\nPackage structure:');
+    const fs = require('fs');
+    try {
+      const dirs = fs.readdirSync(packageRoot);
+      console.error('Root directory contains:', dirs);
+      if (dirs.includes('dist')) {
+        console.error('dist directory contains:', fs.readdirSync(path.join(packageRoot, 'dist')));
+      }
+    } catch (fsErr) {
+      console.error('Error listing directories:', fsErr.message);
+    }
+    process.exit(1);
+  }
+}
 
 // Execute the CLI
-main();
+if (cli && typeof cli.main === 'function') {
+  cli.main().catch(err => {
+    console.error('Error executing CLI:', err);
+    process.exit(1);
+  });
+} else {
+  console.error('CLI module found but main function not available');
+  process.exit(1);
+}

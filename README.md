@@ -1,6 +1,15 @@
 # GitAssure
 
-A comprehensive analysis tool for evaluating GitHub repositories. GitAssure assesses sustainability and security risks, generating detailed reports to help you make informed decisions about the repositories you depend on.
+[![GitHub Release](https://img.shields.io/github/v/release/billyjbryant/git-assure?display_name=tag&style=for-the-badge)](https://github.com/billyjbryant/git-assure/releases)
+[![npm version](https://img.shields.io/npm/v/git-assure?style=for-the-badge&color=red)](https://www.npmjs.com/package/git-assure)
+[![GitHub Release Date](https://img.shields.io/github/release-date/billyjbryant/git-assure?display_date=published_at&style=for-the-badge)](https://github.com/billyjbryant/git-assure/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/billyjbryant/git-assure/release.yml?branch=main&style=for-the-badge)](https://github.com/billyjbryant/git-assure/actions/workflows/release.yml)
+[![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg?style=for-the-badge)](https://github.com/semantic-release/semantic-release)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?style=for-the-badge)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22.x-green?style=for-the-badge)](https://nodejs.org/)
+
+A comprehensive analysis tool for evaluating GitHub repositories. Git-Assure assesses sustainability and security risks, generating detailed reports to help you make informed decisions about the repositories you depend on.
 
 ## Table of Contents
 

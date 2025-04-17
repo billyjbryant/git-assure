@@ -5,8 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "git-assure": "bin/git-assure",
-    "repo-analyzer": "bin/repo-analyzer"
+    "git-assure": "bin/git-assure"
   },
   "type": "commonjs",
   "scripts": {
@@ -22,7 +21,9 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write .",
     "prepare": "husky && yarn run build",
-    "prepublishOnly": "yarn test && yarn run lint"
+    "prepublishOnly": "yarn test && yarn run lint",
+    "prepublish:check": "yarn build && yarn pack --dry-run",
+    "verify": "bash scripts/verify-package.sh"
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
@@ -86,7 +87,7 @@
   },
   "files": [
     "bin/",
-    "src/",
+    "dist/",
     "action.yml",
     "LICENSE",
     "index.js"

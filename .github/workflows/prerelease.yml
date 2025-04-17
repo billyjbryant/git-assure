@@ -53,7 +53,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: yarn ci
+        run: yarn install --frozen-lockfile
 
       - name: Run tests
         run: yarn test
@@ -64,6 +64,23 @@ jobs:
         run: yarn lint
         env:
           CI: true
+
+      - name: Build package
+        run: yarn build
+
+      - name: Verify dist directory exists
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Error: dist directory not found. Build may have failed."
+            exit 1
+          fi
+
+          if [ ! -f "dist/src/cli.js" ]; then
+            echo "Error: CLI module not found in dist. Build may be incomplete."
+            exit 1
+          fi
+
+          echo "Build artifacts verified successfully."
 
       - name: Extract branch info
         id: branch_info
@@ -88,9 +105,19 @@ jobs:
         run: |
           # Configure git for the release process
           git config --global user.name 'Publisher Bot'
-          git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>'
+          git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
+
+          # Make sure build artifacts are included in the release
+          echo "Ensuring build artifacts are included..."
+          if [ ! -d "dist" ]; then
+            echo "Running build again to ensure dist directory exists..."
+            yarn build
+          fi
 
           # Use semantic-release for the prerelease with custom prerelease ID
+          # First create an empty commit to ensure semantic-release detects a change
+          git commit --allow-empty -m "feat: Force prerelease version bump via workflow"
+
           npx semantic-release --dry-run --no-ci --preset angular \
             --branches ${{ github.head_ref }} \
             --prerelease "pre-${BRANCH_NAME}" \
@@ -108,20 +135,32 @@ jobs:
                 const version = pkg.version;
                 const branchName = process.env.BRANCH_NAME;
                 
+                // Check if dist directory was properly built and included
+                const distExists = fs.existsSync('./dist');
+                const cliExists = fs.existsSync('./dist/src/cli.js');
+                
+                const buildStatus = distExists && cliExists 
+                  ? '✅ Build artifacts verified' 
+                  : '⚠️ Some build artifacts may be missing';
+                
                 github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  body: `🚀 Pre-release version **${version}** has been created for branch \`${branchName}\`.\n\nThis is a test release and won't update the main version of the package.`
-                });
-              } else {
-                github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: `⚠️ Could not determine pre-release version. Please check the workflow logs.`
-                });
-              }
-            } catch (error) {
-              console.error('Error commenting on PR:', error);
-            }
+                  body: `🚀 Pre-release version **${version}** has been created for branch \`${branchName}\`.
+                  
+                    ${buildStatus}
+
+                    This is a test release and won't update the main version of the package.`
+                                    });
+                                  } else {
+                                    github.rest.issues.createComment({
+                                      owner: context.repo.owner,
+                                      repo: context.repo.repo,
+                                      issue_number: context.issue.number,
+                                      body: `⚠️ Could not determine pre-release version. Please check the workflow logs.`
+                                    });
+                                  }
+                                } catch (error) {
+                                  console.error('Error commenting on PR:', error);
+                                }

@@ -1,0 +1,23 @@
+# Development files
+node_modules/
+.github/
+.vscode/
+coverage/
+test/
+scripts/
+build/
+src/
+*.test.ts
+*.spec.ts
+jest.config.js
+.releaserc*
+eslint.config.js
+.eslintignore
+.eslintrc*
+.prettierrc*
+.prettierignore
+tsconfig*.json
+*.tgz
+
+# Don't ignore dist folder
+!dist/
