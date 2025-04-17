@@ -43,6 +43,23 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Create GitHub App Token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.PUBLISHER_CERT }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Retrieve GitHub App User ID
+        id: get-user-id
+        run: |
+          userid=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)
+          echo "user-id=${userid}"
+          echo "user-id=${userid}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -171,33 +188,24 @@ jobs:
 
       - name: Release with label-based or manual type
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          # Configure git for the release process
+          git config --global user.name 'Publisher Bot'
+          git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>'
+
+          # Get the release type and source branch from the outputs
+          RELEASE_TYPE="${{ steps.determine_release_type.outputs.release_type }}"
           if [ "$RELEASE_TYPE" = "major" ]; then
-            # Force a major release with a simulated breaking change commit
-            git config user.name "${GITHUB_ACTOR}"
-            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-            git commit --allow-empty -m "BREAKING CHANGE: Force major version bump via manual workflow"
-            npx semantic-release --verbose
+            npx semantic-release --verbose --force-release=major
           elif [ "$RELEASE_TYPE" = "minor" ]; then
-            # Force a minor release with a simulated feature commit
-            git config user.name "${GITHUB_ACTOR}"
-            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-            git commit --allow-empty -m "feat: Force minor version bump via manual workflow"
-            npx semantic-release --verbose
+            npx semantic-release --verbose --force-release=minor
           elif [ "$RELEASE_TYPE" = "patch" ]; then
-            # Force a patch release with a simulated fix commit
-            git config user.name "${GITHUB_ACTOR}"
-            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-            git commit --allow-empty -m "fix: Force patch version bump via manual workflow"
-            npx semantic-release --verbose
+            npx semantic-release --verbose --force-release=patch
           elif [ "$RELEASE_TYPE" = "prerelease" ]; then
             # Use custom prerelease identifier if provided, otherwise use branch name
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$PRERELEASE_ID" ]; then
-              git config user.name "${GITHUB_ACTOR}"
-              git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-              git commit --allow-empty -m "feat: Force prerelease version bump via manual workflow"
               npx semantic-release --verbose --prerelease "$PRERELEASE_ID"
             else
               npx semantic-release --verbose --prerelease "pre-${SOURCE_BRANCH}"
