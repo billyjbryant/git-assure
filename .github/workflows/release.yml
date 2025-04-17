@@ -71,7 +71,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Shrinkwrap dependencies
-        run: npm shrinkwrap --no-optional
+        run: npm shrinkwrap --omit=optional
 
       - name: Run tests
         run: yarn test
