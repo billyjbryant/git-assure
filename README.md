@@ -19,10 +19,10 @@ A comprehensive analysis tool for evaluating GitHub repositories. Git-Assure ass
     - [As an npm Package](#as-an-npm-package)
     - [As a Command Line Tool](#as-a-command-line-tool)
   - [Usage](#usage)
-    - [As an npm Package](#as-an-npm-package-1)
-    - [As a Command Line Tool](#as-a-command-line-tool-1)
-    - [As a GitHub Action](#as-a-github-action)
-      - [PR Commenting Feature](#pr-commenting-feature)
+    - [In Node.js](#in-nodejs)
+    - [Command Line Tool](#command-line-tool)
+    - [GitHub Action](#github-action)
+      - [PR Commenting](#pr-commenting)
   - [Output](#output)
   - [Contributing](#contributing)
   - [License](#license)
@@ -45,6 +45,7 @@ You can install the CLI globally via npm:
 
 ```bash
 npm install -g git-assure
+git-assure owner/repo
 ```
 
 Or use it directly via npx:
@@ -53,41 +54,9 @@ Or use it directly via npx:
 npx git-assure owner/repo
 ```
 
-Alternatively, you can:
-
-1. Clone the repository:
-
-   ```shell
-   git clone https://github.com/billyjbryant/git-assure.git
-   ```
-
-2. Navigate to the project directory:
-
-   ```shell
-   cd git-assure
-   ```
-
-3. Install the dependencies:
-
-   ```shell
-   npm install
-   ```
-
-4. Make the `bin/git-assure` file executable:
-
-   ```shell
-   chmod +x bin/git-assure
-   ```
-
-5. Optionally, you can install it globally:
-
-   ```shell
-   npm install -g .
-   ```
-
 ## Usage
 
-### As an npm Package
+### In Node.js
 
 You can use the analyzer in your JavaScript or TypeScript projects:
 
@@ -116,7 +85,7 @@ async function runAnalysis() {
 runAnalysis();
 ```
 
-### As a Command Line Tool
+### Command Line Tool
 
 You can run the analyzer using one of the following methods:
 
@@ -124,11 +93,8 @@ You can run the analyzer using one of the following methods:
 # If installed globally or in PATH
 git-assure owner/repo
 
-# If using the local script
-./bin/git-assure owner/repo
-
-# Using npm start
-npm start -- owner/repo
+# If using npx
+npx git-assure owner/repo
 
 # With full URL
 git-assure https://github.com/owner/repo
@@ -137,7 +103,7 @@ git-assure https://github.com/owner/repo
 git-assure owner/repo --output analysis-report.md
 ```
 
-### As a GitHub Action
+### GitHub Action
 
 You can use this tool as a GitHub Action in your workflows:
 
@@ -162,7 +128,7 @@ jobs:
 
       - name: Analyze Repository
         id: analysis
-        uses: billyjbryant/git-assure@v1
+        uses: billyjbryant/git-assure@v0
         with:
           # The repository to analyze (defaults to the current repository)
           repository: ${{ github.repository }}
@@ -189,7 +155,7 @@ jobs:
           path: repo-analysis.md
 ```
 
-#### PR Commenting Feature
+#### PR Commenting
 
 When used in a pull request workflow, the action can automatically post analysis results as a comment on the PR:
 
@@ -217,7 +183,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Analyze Repository
-        uses: billyjbryant/git-assure@v1
+        uses: billyjbryant/git-assure@v0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-pr: 'true'
@@ -247,7 +213,7 @@ It also generates:
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes. Please see the [CONTRIBUTING.md](CONTRIBUTING.md) file for more details.
 
 ## License
 
