@@ -135,7 +135,7 @@ jobs:
           echo "GitHub Action outputs verified successfully"
 
       - name: Upload analysis artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: github-action-test-results
           path: react-analysis.md
