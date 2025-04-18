@@ -30,8 +30,8 @@ outputs:
   summary:
     description: 'Markdown summary of the analysis'
 runs:
-  using: 'node20'
-  main: 'src/action.js'
+  using: 'node22'
+  main: 'src/action.ts'
 branding:
   icon: 'shield'
   color: 'green'
