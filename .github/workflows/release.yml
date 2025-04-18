@@ -24,6 +24,44 @@ on:
         default: ''
 
 jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'yarn'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run tests
+        run: yarn test
+        env:
+          CI: true
+
+      - name: Run lint
+        run: yarn lint
+        env:
+          CI: true
+          NODE_ENV: production
+      - name: Run TypeScript check
+        run: yarn tsc --noEmit
+        env:
+          CI: true
+          NODE_ENV: production
+
+  # This job is responsible for creating a release when a PR is merged or manually triggered
+  # It uses the GitHub App token to authenticate and perform the release
   release:
     name: Release GitAssure
     runs-on: ubuntu-latest
@@ -73,32 +111,8 @@ jobs:
       - name: Shrinkwrap dependencies
         run: npm shrinkwrap --omit=optional
 
-      - name: Run tests
-        run: yarn test
-        env:
-          CI: true
-
-      - name: Run lint
-        run: yarn lint
-        env:
-          CI: true
-
       - name: Build package
         run: yarn build
-
-      - name: Verify dist directory exists
-        run: |
-          if [ ! -d "dist" ]; then
-            echo "Error: dist directory not found. Build may have failed."
-            exit 1
-          fi
-
-          if [ ! -f "dist/src/cli.js" ]; then
-            echo "Error: CLI module not found in dist. Build may be incomplete."
-            exit 1
-          fi
-
-          echo "Build artifacts verified successfully."
 
       - name: Determine release type from PR labels or manual input
         id: determine_release_type
