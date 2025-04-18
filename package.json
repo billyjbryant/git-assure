@@ -1,6 +1,6 @@
 {
   "name": "git-assure",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A tool for analyzing GitHub repositories for sustainability and security risks.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

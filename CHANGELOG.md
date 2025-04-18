@@ -1,3 +1,5 @@
+## [0.0.4](https://github.com/billyjbryant/git-assure/compare/v0.0.3...v0.0.4) (2025-04-18)
+
 ## [0.0.3](https://github.com/billyjbryant/git-assure/compare/v0.0.2...v0.0.3) (2025-04-17)
 
 ### Bug Fixes
