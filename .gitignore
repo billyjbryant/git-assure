@@ -3,11 +3,18 @@ node_modules/
 jspm_packages/
 
 # Build outputs
-dist/
+dist/**/*
 build/
 lib/
 out/
 *.tsbuildinfo
+
+# Don't ignore the files needed for the action to run
+!dist/src/action.js
+!dist/src/analyzer.js
+
+# Don't ignore these files, needed for bootstrapping
+!bin/git-assure
 
 # Coverage reports
 coverage/
@@ -77,5 +84,3 @@ package-lock.json
 pnpm-lock.yaml
 # Comment out the above if you're using them for dependency locking
 
-# Don't ignore these files, needed for bootstrapping
-!bin/git-assure

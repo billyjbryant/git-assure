@@ -4,3 +4,9 @@ npm test
 
 # Run lint-staged
 npx lint-staged
+
+# Build the project
+yarn build
+
+# Add build artifacts to commit
+git add dist/src/action.js dist/src/cli.js -f

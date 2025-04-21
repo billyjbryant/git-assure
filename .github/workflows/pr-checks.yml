@@ -6,19 +6,23 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
-  issues: write
-  actions: read
-  statuses: write
   checks: write
+  statuses: write
 
 jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    outputs:
+      started-at: ${{ steps.timestamp.outputs.TIMESTAMP }}
 
     steps:
+      - name: Output Timestamp
+        id: timestamp
+        run: echo "TIMESTAMP=$(date -Iseconds)" >> $GITHUB_OUTPUT
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -47,6 +51,7 @@ jobs:
   validate-typescript:
     name: TypeScript Validation
     runs-on: ubuntu-latest
+    needs: [build-and-test]
 
     steps:
       - name: Checkout code
@@ -67,6 +72,7 @@ jobs:
   analyze-dependencies:
     name: Dependency Analysis
     runs-on: ubuntu-latest
+    needs: [build-and-test]
 
     steps:
       - name: Checkout code
@@ -85,15 +91,101 @@ jobs:
         run: yarn audit
         continue-on-error: true # Don't fail the build on vulnerabilities, just report them
 
+  test-github-action:
+    name: Test GitHub Action
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'yarn'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build the action
+        run: yarn build
+
+      - name: Test action on popular repositories
+        id: test-action
+        uses: ./
+        with:
+          repository: 'facebook/react'
+          output-file: 'react-analysis.md'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify action output
+        run: |
+          if [ ! -f "react-analysis.md" ]; then
+            echo "Error: Output file was not created"
+            exit 1
+          fi
+
+          if [ ! -s "react-analysis.md" ]; then
+            echo "Error: Output file is empty"
+            exit 1
+          fi
+
+          echo "GitHub Action successfully analyzed repository and generated report"
+
+          # Check that the action outputs contain expected values
+          if [ -z "${{ steps.test-action.outputs.risk-score }}" ]; then
+            echo "Error: Missing risk-score output"
+            exit 1
+          fi
+
+          if [ -z "${{ steps.test-action.outputs.risk-rating }}" ]; then
+            echo "Error: Missing risk-rating output"
+            exit 1
+          fi
+
+          echo "GitHub Action outputs verified successfully"
+
+      - name: Upload analysis artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-action-test-results
+          path: react-analysis.md
+          retention-days: 7
+
   comment-pr-status:
     name: Comment PR Status
     runs-on: ubuntu-latest
-    needs: [build-and-test, validate-typescript, analyze-dependencies]
+    needs: [build-and-test, validate-typescript, analyze-dependencies, test-github-action]
     if: always() # Run even if previous jobs have failed
+
+    # Explicitly set permissions for this job
+    permissions:
+      checks: write
+      pull-requests: write
+      statuses: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Add step to create GitHub App token
+      - name: Create GitHub App Token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.PUBLISHER_CERT }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            git-assure
+          permission-checks: write
 
       - name: Generate PR Comment
         id: pr-comment
@@ -102,18 +194,29 @@ jobs:
           BUILD_STATUS: ${{ needs.build-and-test.result }}
           TS_STATUS: ${{ needs.validate-typescript.result }}
           DEP_STATUS: ${{ needs.analyze-dependencies.result }}
+          ACTION_STATUS: ${{ needs.test-github-action.result }}
+          STARTED_AT: ${{ needs.build-and-test.outputs.started-at }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Use the GitHub App token instead of GITHUB_TOKEN
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const buildStatus = process.env.BUILD_STATUS;
             const tsStatus = process.env.TS_STATUS;
             const depStatus = process.env.DEP_STATUS;
+            const actionStatus = process.env.ACTION_STATUS;
+            const startedAt = process.env.STARTED_AT;
+            const endedAt = new Date().toISOString();
+
+            console.log(`Checks Started at: ${new Date(startedAt).toLocaleString()}`);
+            console.log(`Checks Ended at: ${new Date(endedAt).toLocaleString()}`);
 
             function getStatusEmoji(status) {
               switch(status) {
                 case 'success': return '✅';
                 case 'failure': return '❌';
                 case 'cancelled': return '⚠️';
+                case 'skipped': return '⏭️';
+                case 'neutral': return '⚪';
                 default: return '⚠️';
               }
             }
@@ -124,12 +227,15 @@ jobs:
             | Build and Test | ${getStatusEmoji(buildStatus)} |
             | TypeScript Validation | ${getStatusEmoji(tsStatus)} |
             | Dependency Analysis | ${getStatusEmoji(depStatus)} |
+            | GitHub Action Test | ${getStatusEmoji(actionStatus)} |
             `;
 
-            const allPassed = buildStatus === 'success' && tsStatus === 'success';
+            const allPassed = buildStatus === 'success' && tsStatus === 'success' && actionStatus === 'success';
+            const anyFailed = buildStatus === 'failure' || tsStatus === 'failure' || depStatus === 'failure' || actionStatus === 'failure';
+
             const conclusion = allPassed 
               ? '✨ All required checks have passed!' 
-              : '⚠️ Some checks have failed. Please review the issues above.';
+              : '⚠️ Some checks have failed or may have been skipped. Please review the issues above.';
 
             const comment = `## PR Check Results
 
@@ -138,11 +244,35 @@ jobs:
             ${conclusion}
 
             *Automated comment from GitHub Actions*
+            <!-- PR Check Results Test -->
             `;
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+            try {
+              // Check if the PR already has a comment
+              const { data: comments } = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+
+              const existingComment = comments.find(comment => comment.body.includes('<!-- PR Check Results Test -->'));
+              if (existingComment) {
+                console.log('Updating existing comment.');
+                await github.rest.issues.updateComment({
+                  comment_id: existingComment.id,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              } else {
+                console.log('Creating a new comment.');
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              }
+            } catch (error) {
+              console.error('Error commenting on PR:', error);
+            }
