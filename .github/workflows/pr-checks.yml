@@ -5,13 +5,12 @@ on:
     branches: ['**']
     types: [opened, synchronize, reopened]
 
+# Set correct permissions at the workflow level
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
-  issues: write
-  actions: read
-  statuses: write
   checks: write
+  statuses: write
 
 jobs:
   build-and-test:
@@ -19,10 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       started-at: ${{ steps.timestamp.outputs.TIMESTAMP }}
+
     steps:
       - name: Output Timestamp
         id: timestamp
         run: echo "TIMESTAMP=$(date -Iseconds)" >> $GITHUB_OUTPUT
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -165,10 +166,17 @@ jobs:
     needs: [build-and-test, validate-typescript, analyze-dependencies, test-github-action]
     if: always() # Run even if previous jobs have failed
 
+    # Explicitly set permissions for this job
+    permissions:
+      checks: write
+      pull-requests: write
+      statuses: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Add step to create GitHub App token
       - name: Create GitHub App Token
         uses: actions/create-github-app-token@v1
         id: app-token
@@ -176,15 +184,6 @@ jobs:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           private-key: ${{ secrets.PUBLISHER_CERT }}
           owner: ${{ github.repository_owner }}
-
-      - name: Retrieve GitHub App User ID
-        id: get-user-id
-        run: |
-          userid=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)
-          echo "user-id=${userid}"
-          echo "user-id=${userid}" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Generate PR Comment
         id: pr-comment
@@ -196,6 +195,7 @@ jobs:
           ACTION_STATUS: ${{ needs.test-github-action.result }}
           STARTED_AT: ${{ needs.build-and-test.outputs.started-at }}
         with:
+          # Use the GitHub App token instead of GITHUB_TOKEN
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const buildStatus = process.env.BUILD_STATUS;
@@ -244,25 +244,35 @@ jobs:
             *Automated comment from GitHub Actions*
             `;
 
-            // Create a check run for the PR
-            github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'PR Checks',
-              head_sha: context.sha,
-              status: 'completed',
-              conclusion: anyFailed ? 'failure' : 'success',
-              completed_at: endedAt,
-              started_at: startedAt,
-              output: {
-                title: 'PR Checks Summary',
-                summary: conclusion,
-                text: statusTable
+            try {
+              // Create a check run for the PR
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'GitAssure PR Checks',
+                head_sha: context.payload.pull_request.head.sha,
+                status: 'completed',
+                conclusion: anyFailed ? 'failure' : 'success',
+                completed_at: endedAt,
+                started_at: startedAt || new Date(Date.now() - 60000).toISOString(),
+                output: {
+                  title: 'PR Checks Summary',
+                  summary: conclusion,
+                  text: statusTable
+                }
+              });
+              console.log('Successfully created check run with GitHub App token');
+            } catch (error) {
+              console.error('Error creating check run:');
+              console.error(`Status: ${error.status}`);
+              console.error(`Message: ${error.message}`);
+              if (error.response) {
+                console.error('Response data:', JSON.stringify(error.response.data));
               }
-            });
+            }
 
             // Post the comment on the PR
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
