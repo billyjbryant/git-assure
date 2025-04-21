@@ -246,6 +246,8 @@ jobs:
 
             // Create a check run for the PR
             github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               name: 'PR Checks',
               head_sha: context.sha,
               status: 'completed',
