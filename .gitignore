@@ -3,7 +3,7 @@ node_modules/
 jspm_packages/
 
 # Build outputs
-dist/
+dist/**/*
 build/
 lib/
 out/
@@ -79,3 +79,7 @@ pnpm-lock.yaml
 
 # Don't ignore these files, needed for bootstrapping
 !bin/git-assure
+
+# Don't ignore the files needed for the action to run
+!dist/src/action.js
+!dist/src/analyzer.js
