@@ -244,39 +244,35 @@ jobs:
             ${conclusion}
 
             *Automated comment from GitHub Actions*
+            <!-- PR Check Results Test -->
             `;
 
             try {
-              // Create a check run for the PR
-              await github.rest.checks.create({
+              // Check if the PR already has a comment
+              const { data: comments } = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
                 owner: context.repo.owner,
-                repo: context.repo.repo,
-                name: 'GitAssure PR Checks',
-                head_sha: context.payload.pull_request.head.sha,
-                status: 'completed',
-                conclusion: anyFailed ? 'failure' : 'success',
-                completed_at: endedAt,
-                started_at: startedAt || new Date(Date.now() - 60000).toISOString(),
-                output: {
-                  title: 'PR Checks Summary',
-                  summary: conclusion,
-                  text: statusTable
-                }
+                repo: context.repo.repo
               });
-              console.log('Successfully created check run with GitHub App token');
-            } catch (error) {
-              console.error('Error creating check run:');
-              console.error(`Status: ${error.status}`);
-              console.error(`Message: ${error.message}`);
-              if (error.response) {
-                console.error('Response data:', JSON.stringify(error.response.data));
-              }
-            }
 
-            // Post the comment on the PR
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+              const existingComment = comments.find(comment => comment.body.includes('<!-- PR Check Results Test -->'));
+              if (existingComment) {
+                console.log('Updating existing comment.');
+                await github.rest.issues.updateComment({
+                  comment_id: existingComment.id,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              } else {
+                console.log('Creating a new comment.');
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              }
+            } catch (error) {
+              console.error('Error commenting on PR:', error);
+            }
