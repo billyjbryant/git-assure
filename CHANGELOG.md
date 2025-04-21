@@ -1,3 +1,9 @@
+## [0.0.5](https://github.com/billyjbryant/git-assure/compare/v0.0.4...v0.0.5) (2025-04-21)
+
+### Bug Fixes
+
+- added github-action test in pr-checks ([#2](https://github.com/billyjbryant/git-assure/issues/2)) ([e2d5754](https://github.com/billyjbryant/git-assure/commit/e2d57548ebc49ea02ad8b3b0041384e02869b218))
+
 ## [0.0.4](https://github.com/billyjbryant/git-assure/compare/v0.0.3...v0.0.4) (2025-04-18)
 
 ## [0.0.3](https://github.com/billyjbryant/git-assure/compare/v0.0.2...v0.0.3) (2025-04-17)
