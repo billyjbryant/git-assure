@@ -5,7 +5,6 @@ on:
     branches: ['**']
     types: [opened, synchronize, reopened]
 
-# Set correct permissions at the workflow level
 permissions:
   contents: read
   pull-requests: write
@@ -184,6 +183,9 @@ jobs:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           private-key: ${{ secrets.PUBLISHER_CERT }}
           owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.repository }}
+          permission-checks: write
 
       - name: Generate PR Comment
         id: pr-comment
