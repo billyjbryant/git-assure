@@ -169,6 +169,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Create GitHub App Token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.PUBLISHER_CERT }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Retrieve GitHub App User ID
+        id: get-user-id
+        run: |
+          userid=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)
+          echo "user-id=${userid}"
+          echo "user-id=${userid}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
       - name: Generate PR Comment
         id: pr-comment
         uses: actions/github-script@v6
@@ -178,7 +195,7 @@ jobs:
           DEP_STATUS: ${{ needs.analyze-dependencies.result }}
           ACTION_STATUS: ${{ needs.test-github-action.result }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const buildStatus = process.env.BUILD_STATUS;
             const tsStatus = process.env.TS_STATUS;
