@@ -184,7 +184,7 @@ jobs:
           private-key: ${{ secrets.PUBLISHER_CERT }}
           owner: ${{ github.repository_owner }}
           repositories: |
-            'git-assure'
+            git-assure
           permission-checks: write
 
       - name: Generate PR Comment
