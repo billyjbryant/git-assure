@@ -194,6 +194,7 @@ jobs:
           TS_STATUS: ${{ needs.validate-typescript.result }}
           DEP_STATUS: ${{ needs.analyze-dependencies.result }}
           ACTION_STATUS: ${{ needs.test-github-action.result }}
+          STARTED_AT: ${{ needs.build-and-test.outputs.started-at }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
@@ -201,7 +202,7 @@ jobs:
             const tsStatus = process.env.TS_STATUS;
             const depStatus = process.env.DEP_STATUS;
             const actionStatus = process.env.ACTION_STATUS;
-            const startedAt = ${{ needs.build-and-test.outputs.started-at }};
+            const startedAt = process.env.STARTED_AT;
             const endedAt = new Date().toISOString();
 
             console.log(`Checks Started at: ${new Date(startedAt).toLocaleString()}`);
