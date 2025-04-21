@@ -254,7 +254,7 @@ jobs:
               output: {
                 title: 'PR Checks Summary',
                 summary: conclusion,
-                text: statusTable,
+                text: statusTable
               }
             });
 
