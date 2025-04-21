@@ -17,8 +17,12 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
-
+    outputs:
+      started-at: ${{ steps.timestamp.outputs.TIMESTAMP }}
     steps:
+      - name: Output Timestamp
+        id: timestamp
+        run: echo "TIMESTAMP=$(date -Iseconds)" >> $GITHUB_OUTPUT
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -47,6 +51,7 @@ jobs:
   validate-typescript:
     name: TypeScript Validation
     runs-on: ubuntu-latest
+    needs: [build-and-test]
 
     steps:
       - name: Checkout code
@@ -67,6 +72,7 @@ jobs:
   analyze-dependencies:
     name: Dependency Analysis
     runs-on: ubuntu-latest
+    needs: [build-and-test]
 
     steps:
       - name: Checkout code
@@ -178,12 +184,19 @@ jobs:
             const tsStatus = process.env.TS_STATUS;
             const depStatus = process.env.DEP_STATUS;
             const actionStatus = process.env.ACTION_STATUS;
+            const startedAt = ${{ needs.build-and-test.outputs.started-at }};
+            const endedAt = new Date().toISOString();
+
+            console.log(`Checks Started at: ${new Date(startedAt).toLocaleString()}`);
+            console.log(`Checks Ended at: ${new Date(endedAt).toLocaleString()}`);
 
             function getStatusEmoji(status) {
               switch(status) {
                 case 'success': return '✅';
                 case 'failure': return '❌';
                 case 'cancelled': return '⚠️';
+                case 'skipped': return '⏭️';
+                case 'neutral': return '⚪';
                 default: return '⚠️';
               }
             }
@@ -198,9 +211,11 @@ jobs:
             `;
 
             const allPassed = buildStatus === 'success' && tsStatus === 'success' && actionStatus === 'success';
+            const anyFailed = buildStatus === 'failure' || tsStatus === 'failure' || depStatus === 'failure' || actionStatus === 'failure';
+
             const conclusion = allPassed 
               ? '✨ All required checks have passed!' 
-              : '⚠️ Some checks have failed. Please review the issues above.';
+              : '⚠️ Some checks have failed or may have been skipped. Please review the issues above.';
 
             const comment = `## PR Check Results
 
@@ -211,6 +226,22 @@ jobs:
             *Automated comment from GitHub Actions*
             `;
 
+            // Create a check run for the PR
+            github.rest.checks.create({
+              name: 'PR Checks',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: anyFailed ? 'failure' : 'success',
+              completed_at: endedAt,
+              started_at: startedAt,
+              output: {
+                title: 'PR Checks Summary',
+                summary: conclusion,
+                text: statusTable,
+              }
+            });
+
+            // Post the comment on the PR
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
