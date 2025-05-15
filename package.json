@@ -21,6 +21,8 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write .",
     "prepare": "husky && yarn run build",
+    "package": "ncc build src/action.ts -o dist --license licenses.txt --minify",
+    "package:watch": "yarn run package -- --watch",
     "prepublishOnly": "yarn test && yarn run lint",
     "prepublish:check": "yarn build && yarn pack --dry-run",
     "verify": "bash scripts/verify-package.sh"
@@ -40,6 +42,7 @@
     "@types/semver": "^7.7.0",
     "@typescript-eslint/eslint-plugin": "^8.30.1",
     "@typescript-eslint/parser": "^8.30.1",
+    "@vercel/ncc": "^0.38.3",
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "eslint": "^9.24.0",
     "eslint-config-prettier": "^10.1.2",

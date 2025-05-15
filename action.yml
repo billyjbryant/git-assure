@@ -30,8 +30,20 @@ outputs:
   summary:
     description: 'Markdown summary of the analysis'
 runs:
-  using: 'node20'
-  main: 'dist/src/action.js'
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Run analyzer
+      shell: bash
+      run: node dist/src/action.js
 branding:
   icon: 'shield'
   color: 'green'
