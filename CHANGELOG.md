@@ -1,3 +1,9 @@
+## [0.0.7](https://github.com/billyjbryant/git-assure/compare/v0.0.6...v0.0.7) (2025-05-15)
+
+### Bug Fixes
+
+- **action:** Uses NCC to build package for github action ([#5](https://github.com/billyjbryant/git-assure/issues/5)) ([4e79944](https://github.com/billyjbryant/git-assure/commit/4e79944a36852d6b6f88bbb60f0bfd78e62343f0))
+
 ## [0.0.6](https://github.com/billyjbryant/git-assure/compare/v0.0.5...v0.0.6) (2025-05-15)
 
 ### Bug Fixes
