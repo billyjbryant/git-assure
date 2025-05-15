@@ -8,5 +8,8 @@ npx lint-staged
 # Build the project
 yarn build
 
+# Compile with ncc
+npx ncc build src/action.ts -o dist/ --license licenses.txt
+
 # Add build artifacts to commit
-git add dist/src/action.js dist/src/cli.js -f
+git add dist/*.js dist/*.txt -f
