@@ -92,7 +92,7 @@ jobs:
         continue-on-error: true # Don't fail the build on vulnerabilities, just report them
 
   test-github-action:
-    name: Test GitHub Action
+    name: GitHub Action Test
     runs-on: ubuntu-latest
     needs: [build-and-test]
 
@@ -104,25 +104,14 @@ jobs:
           ref: ${{ github.head_ref }}
           persist-credentials: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'yarn'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Build the action
-        run: yarn build
-
-      - name: Test action on popular repositories
+      - name: Test action on self
         id: test-action
         uses: ./
         with:
-          repository: 'facebook/react'
+          repository: 'billyjbryant/git-assure'
           output-file: 'react-analysis.md'
+          comment-on-pr: 'true'
+          comment-mode: 'update-existing'
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify action output

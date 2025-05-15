@@ -31,7 +31,7 @@ outputs:
     description: 'Markdown summary of the analysis'
 runs:
   using: 'node20'
-  main: 'dist/src/action.js'
+  main: 'dist/index.js'
 branding:
   icon: 'shield'
   color: 'green'
