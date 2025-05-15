@@ -92,7 +92,7 @@ jobs:
         continue-on-error: true # Don't fail the build on vulnerabilities, just report them
 
   test-github-action:
-    name: Test GitHub Action
+    name: GitHub Action Test
     runs-on: ubuntu-latest
     needs: [build-and-test]
 
