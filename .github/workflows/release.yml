@@ -264,7 +264,7 @@ jobs:
 
           # Store the release exit code
           RELEASE_EXIT_CODE=$?
-          if [ $RELEASE_EXIT_CODE -ne 0 ]; then
+          if [ "$RELEASE_EXIT_CODE" -ne 0 ]; then
             echo "::error::Semantic release failed with exit code $RELEASE_EXIT_CODE"
             exit $RELEASE_EXIT_CODE
           fi
