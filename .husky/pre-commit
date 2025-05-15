@@ -12,4 +12,7 @@ yarn build
 npx ncc build src/action.ts -o dist/ --license licenses.txt
 
 # Add build artifacts to commit
-git add dist/**/*.js dist/**/*.txt -f
+find ./dist -type f \( -name '*.js' -o -name '*.js.map' \) -exec git add {} -f \;
+
+# Add license file to commit
+git add dist/licenses.txt
