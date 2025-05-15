@@ -1,3 +1,9 @@
+## [0.0.6](https://github.com/billyjbryant/git-assure/compare/v0.0.5...v0.0.6) (2025-05-15)
+
+### Bug Fixes
+
+- **release:** Switched out the functionality for major tag management to Semantic release ([#4](https://github.com/billyjbryant/git-assure/issues/4)) ([3ae2832](https://github.com/billyjbryant/git-assure/commit/3ae283234d1f968877b6dc0e7cd062657d6485f8))
+
 ## [0.0.5](https://github.com/billyjbryant/git-assure/compare/v0.0.4...v0.0.5) (2025-04-21)
 
 ### Bug Fixes
