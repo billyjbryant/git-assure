@@ -106,7 +106,7 @@ jobs:
 
       - name: Test action on self
         id: test-action
-        uses: ./dist/src/action.js
+        uses: ./
         with:
           repository: 'billyjbryant/git-assure'
           output-file: 'react-analysis.md'
