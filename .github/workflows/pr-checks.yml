@@ -91,8 +91,8 @@ jobs:
         run: yarn audit
         continue-on-error: true # Don't fail the build on vulnerabilities, just report them
 
-  test-action-script:
-    name: Test Action Script
+  test-github-action:
+    name: Test GitHub Action
     runs-on: ubuntu-latest
     needs: [build-and-test]
 
@@ -104,25 +104,14 @@ jobs:
           ref: ${{ github.head_ref }}
           persist-credentials: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'yarn'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Build the action
-        run: yarn build
-
-      - name: Test action on popular repositories
+      - name: Test action on self
         id: test-action
-        uses: ./
+        uses: ./dist/src/action.js
         with:
           repository: 'billyjbryant/git-assure'
           output-file: 'react-analysis.md'
+          comment-on-pr: 'true'
+          comment-mode: 'update-existing'
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify action output
@@ -159,27 +148,10 @@ jobs:
           path: react-analysis.md
           retention-days: 7
 
-  test-github-action:
-    name: Test GitHub Action
-    uses: billyjbryant/git-assure@{{ github.sha }}
-    needs: [test-action-script]
-    with:
-      repository: 'billyjbryant/git-assure'
-      output-file: 'react-analysis.md'
-      comment-on-pr: true
-      comment-mode: 'update-existing'
-
   comment-pr-status:
     name: Comment PR Status
     runs-on: ubuntu-latest
-    needs:
-      [
-        build-and-test,
-        validate-typescript,
-        analyze-dependencies,
-        test-action-script,
-        test-github-action
-      ]
+    needs: [build-and-test, validate-typescript, analyze-dependencies, test-github-action]
     if: always() # Run even if previous jobs have failed
 
     # Explicitly set permissions for this job
@@ -211,7 +183,6 @@ jobs:
           BUILD_STATUS: ${{ needs.build-and-test.result }}
           TS_STATUS: ${{ needs.validate-typescript.result }}
           DEP_STATUS: ${{ needs.analyze-dependencies.result }}
-          SCRIPT_STATUS: ${{ needs.test-action-script.result }}
           ACTION_STATUS: ${{ needs.test-github-action.result }}
           STARTED_AT: ${{ needs.build-and-test.outputs.started-at }}
         with:
@@ -221,7 +192,6 @@ jobs:
             const buildStatus = process.env.BUILD_STATUS;
             const tsStatus = process.env.TS_STATUS;
             const depStatus = process.env.DEP_STATUS;
-            const scriptStatus = process.env.SCRIPT_STATUS;
             const actionStatus = process.env.ACTION_STATUS;
             const startedAt = process.env.STARTED_AT;
             const endedAt = new Date().toISOString();
@@ -246,15 +216,14 @@ jobs:
             | Build and Test | ${getStatusEmoji(buildStatus)} |
             | TypeScript Validation | ${getStatusEmoji(tsStatus)} |
             | Dependency Analysis | ${getStatusEmoji(depStatus)} |
-            | GitHub Action Script | ${getStatusEmoji(scriptStatus)} |
             | GitHub Action Test | ${getStatusEmoji(actionStatus)} |
             `;
 
-            const allPassed = buildStatus === 'success' && tsStatus === 'success' && scriptStatus === 'success' && actionStatus === 'success';
-            const anyFailed = buildStatus === 'failure' || tsStatus === 'failure' || depStatus === 'failure' || scriptStatus === 'failure' || actionStatus === 'failure';
+            const allPassed = buildStatus === 'success' && tsStatus === 'success' && actionStatus === 'success';
+            const anyFailed = buildStatus === 'failure' || tsStatus === 'failure' || depStatus === 'failure' || actionStatus === 'failure';
 
-            const conclusion = allPassed
-              ? '✨ All required checks have passed!'
+            const conclusion = allPassed 
+              ? '✨ All required checks have passed!' 
               : '⚠️ Some checks have failed or may have been skipped. Please review the issues above.';
 
             const comment = `## PR Check Results
