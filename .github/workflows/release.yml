@@ -261,3 +261,47 @@ jobs:
           else
             npx semantic-release --verbose
           fi
+
+          # Store the release exit code
+          RELEASE_EXIT_CODE=$?
+          if [ "$RELEASE_EXIT_CODE" -ne 0 ]; then
+            echo "::error::Semantic release failed with exit code $RELEASE_EXIT_CODE"
+            exit $RELEASE_EXIT_CODE
+          fi
+
+      - name: Update Major Version Tag
+        if: success() && steps.determine_release_type.outputs.release_type != 'prerelease'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # Check if a new release was created
+          if [ ! -f "package.json" ]; then
+            echo "::error::package.json not found. Cannot determine version."
+            exit 1
+          fi
+
+          # Get the current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "::error::Could not determine current version from package.json"
+            exit 1
+          fi
+
+          echo "Current version from package.json: $CURRENT_VERSION"
+
+          # Extract major version
+          MAJOR_VERSION=$(echo $CURRENT_VERSION | cut -d. -f1)
+
+          # Set the name for the major version tag
+          MAJOR_TAG="v$MAJOR_VERSION"
+
+          echo "Creating/updating major version tag: $MAJOR_TAG"
+
+          # Create or update the tag to point at the latest commit
+          git tag -f $MAJOR_TAG
+
+          # Push the tag to origin (with force to update if it exists)
+          git push origin $MAJOR_TAG --force
+
+          echo "Successfully updated major version tag: $MAJOR_TAG"
