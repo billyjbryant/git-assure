@@ -30,7 +30,7 @@
   "dependencies": {
     "@actions/core": "^1.11.1",
     "@actions/github": "^6.0.0",
-    "semver": "^7.7.1"
+    "semver": "^7.7.2"
   },
   "devDependencies": {
     "@octokit/rest": "^21.1.1",
